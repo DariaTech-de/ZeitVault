@@ -1,4 +1,14 @@
-import { index, integer, pgEnum, pgTable, text, timestamp, uuid, varchar } from 'drizzle-orm/pg-core';
+import {
+  index,
+  integer,
+  pgEnum,
+  pgTable,
+  text,
+  timestamp,
+  uniqueIndex,
+  uuid,
+  varchar,
+} from 'drizzle-orm/pg-core';
 
 export const timeEntrySource = pgEnum('time_entry_source', ['web', 'mobile', 'terminal']);
 export const timeEntryStatus = pgEnum('time_entry_status', [
@@ -24,7 +34,10 @@ export const employees = pgTable(
     displayName: varchar('display_name', { length: 200 }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index('employees_tenant_idx').on(t.tenantId)],
+  (t) => [
+    index('employees_tenant_idx').on(t.tenantId),
+    uniqueIndex('employees_tenant_personnel_uq').on(t.tenantId, t.personnelNumber),
+  ],
 );
 
 /**

@@ -38,13 +38,16 @@ services:
 
   keycloak:
     # OIDC/SAML Identity-Provider (ADR-0008). Dev-Modus nur fuer lokale Entwicklung.
+    # Importiert den Demo-Realm 'zeitvault' (Client + tenant_id-Mapper + Demo-User).
     image: quay.io/keycloak/keycloak:26.0
-    command: ['start-dev']
+    command: ['start-dev', '--import-realm']
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
     ports:
       - '8080:8080'
+    volumes:
+      - ./keycloak:/opt/keycloak/data/import:ro
 
   openbao:
     # Secrets-Verwaltung (ADR-0007). Dev-Modus nur fuer lokale Entwicklung.

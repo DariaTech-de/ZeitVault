@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './audit/audit.module';
 import { TenantModule } from './common/tenant.module';
 import { DbModule } from './db/db.module';
@@ -11,6 +12,14 @@ import { TimeModule } from './time/time.module';
  * (Abwesenheit, Konten, Workflow, Reporting, Export) werden hier ergaenzt.
  */
 @Module({
-  imports: [DbModule, TenantModule, AuditModule, HealthModule, TimeModule, StampingModule],
+  imports: [
+    DbModule,
+    TenantModule,
+    AuditModule,
+    HealthModule,
+    TimeModule,
+    StampingModule,
+    AdminModule,
+  ],
 })
 export class AppModule {}
