@@ -64,3 +64,22 @@ Im Code nur **vorbereitet**, nicht „fertiggestellt": offizielle DATEV-Schnitts
 ## Ergebnis
 
 Die Checkliste der Großen Prüfung ist – im Rahmen des im Code Umsetzbaren – **vollständig erfüllt**. Offene Punkte sind ausschließlich organisatorisch/extern und als Schnittstellen, Gerüste und Readiness-Checklisten vorbereitet.
+
+---
+
+## Nachtrag: Apps und Observability fertiggestellt (2026-06-26)
+
+Nach der Erstabnahme wurden die zuvor auf Demo-/Gerüst-Niveau bzw. nur konfigurierten Bereiche zu echtem, verifiziertem Code ausgebaut:
+
+- **Web-App mit echtem OIDC-Login (W):** Authorization Code + PKCE über Keycloak (`oidc-client-ts`), kein Demo-`localStorage` mehr; der angemeldete Mitarbeiter wird über `GET /me` aufgelöst (neue Spalte `external_id`, Migration 0013), Rollen kommen aus dem Token. CORS konfigurierbar. **Im echten Browser (headless Chromium) verifiziert:** Login-Kontext via `/me`, Stempeln (Status „Eingestempelt"), rollenbasierte Navigation, Auswertungen.
+- **Mobile-App fertig (M):** Expo SDK 56 / RN 0.85, jetzt **vollwertige Workspace-App** (Typecheck + Lint laufen mit, `tsc --noEmit` grün). OIDC-Login (PKCE via `expo-auth-session`), Tagesübersicht, Offline-First-Stempeln mit idempotentem Sync, biometrisches Entsperren.
+- **Observability real verdrahtet (O):** API und Ledger emittieren OpenTelemetry-Traces (Auto-Instrumentierung HTTP/Express/pg/Nest) bei gesetztem OTLP-Endpunkt. **Gegen einen Stub-Collector wurde ein realer OTLP-Trace-Batch exportiert.**
+- **Konsolidierte Gesamtprüfung:** Build 5/5, Typecheck 8/8 (inkl. Mobile), Lint 0, **134 Tests** (Domain 86, API 14, Ledger 9, Integration 25), 14 Migrationen sauber, keine Secrets.
+
+### Verbleibende, ausschließlich umgebungsgebundene Endabnahme
+
+Diese Schritte erfordern Laufzeitumgebungen, die in der Build-/Prüf-Sandbox nicht verfügbar sind (kein Docker-Daemon für Keycloak, kein Mobil-Emulator), und gehören in die manuelle Abnahme:
+
+- **Realer Browser-Login** der Web-App gegen ein laufendes Keycloak (Realm/Clients liegen bereit).
+- **Mobile-App auf Emulator/Gerät** (Code ist typgeprüft; `pnpm --filter @zeitvault/mobile start`).
+- **Vollständiger Compose-/Cloud-Lauf** inkl. Observability-Stack (Artefakte/Configs liegen bereit).
