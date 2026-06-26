@@ -13,15 +13,18 @@ Verbindliche Quelle der Architektur ist [`../ARCHITEKTUR.md`](../ARCHITEKTUR.md)
 | [`DSGVO.md`](DSGVO.md) | Beschreibt die datenschutzrechtliche Umsetzung (Rechtsgrundlagen, Betroffenenrechte, Loeschen vs. Aufbewahren, Datensparsamkeit, Mitbestimmung). | Erstellt - 2026-06-26 |
 | [`ARBZG.md`](ARBZG.md) | Haelt die arbeitszeitrechtlichen Anforderungen (Hoechst-/Ruhezeiten, Pausen, Aufzeichnungspflicht) fest, die die Regel-Engine abbildet. | Erstellt - 2026-06-26 |
 | [`DATEV-REFERENZ.md`](DATEV-REFERENZ.md) | Verweist auf die offizielle DATEV-Schnittstellenbeschreibung und leitet daraus das Mapping fuer den Lohn-Export ab. | Erstellt - offizielle DATEV-Beschreibung noch zu beschaffen |
+| [`VERFAHRENSDOKUMENTATION.md`](VERFAHRENSDOKUMENTATION.md) | GoBD-Verfahrensdokumentation: Belegfluss, Unveraenderbarkeit, Mandantentrennung, Kontrollen, Aufbewahrung - bezogen auf die umgesetzten Mechanismen. | Erstellt - 2026-06-26 |
+| [`VVT-ROPA.md`](VVT-ROPA.md) | Verzeichnis von Verarbeitungstaetigkeiten (Art. 30 DSGVO), ausgefuellt fuer die umgesetzten Verarbeitungen (V1-V6). | Erstellt - 2026-06-26 |
+| [`DSFA.md`](DSFA.md) | Bausteine der Datenschutz-Folgenabschaetzung (Art. 35 DSGVO) zu Beschaeftigten-Zeit-/Standortdaten. | Erstellt - 2026-06-26 |
+| [`ZERTIFIZIERUNG-READINESS.md`](ZERTIFIZIERUNG-READINESS.md) | Readiness-Mapping der Kontrollen auf Pentest/BSI C5/ISO 27001 und offene Punkte. | Erstellt - 2026-06-26 |
 
 ## Weitere abzulegende Artefakte
 
 Hier werden ergaenzend die folgenden Compliance-Artefakte abgelegt; sie sind teils noch zu erstellen oder zu beschaffen:
 
-- **Verzeichnis von Verarbeitungstaetigkeiten (VVT/RoPA)** - generierbares Verzeichnis der Verarbeitungstaetigkeiten gemaeß DSGVO (vgl. Architektur Paragraf 12).
 - **AVV-Vorlage** - Vorlage fuer den Auftragsverarbeitungsvertrag fuer den SaaS-Betrieb, **inkl. Subunternehmerliste** (Hosting, KMS, eAU-Gateway u. a.).
-- **DSFA-Bausteine** - vorbereitende Bausteine fuer die Datenschutz-Folgenabschaetzung zu Beschaeftigten-Zeit-/Standortdaten.
-- **Offizielle DATEV-Schnittstellenbeschreibung** - maßgebliche Referenz fuer die Feldlayouts des Lohn-Exports; ueber DATEV zu beziehen und hier als verbindliche Quelle zu hinterlegen, bevor das Export-Modul gebaut wird (Architektur Paragraf 15, Paragraf 20).
+- **Offizielle DATEV-Schnittstellenbeschreibung** - maßgebliche Referenz fuer die Feldlayouts des Lohn-Exports; ueber DATEV zu beziehen und hier als verbindliche Quelle zu hinterlegen, bevor das konkrete DATEV-Format gebaut wird (Architektur Paragraf 15, Paragraf 20).
+- **Verzeichnis von Verarbeitungstaetigkeiten (VVT/RoPA)** und **DSFA-Bausteine** - als Vorlagen erstellt (siehe Index); je Einsatz/Mandant zu vervollstaendigen.
 
 ## Disclaimer
 
