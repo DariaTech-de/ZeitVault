@@ -5,6 +5,8 @@
 > Architektur-Grundlage: [`ARCHITEKTUR.md`](ARCHITEKTUR.md); Leitplanken: [`../CLAUDE.md`](../CLAUDE.md).
 > Am Ende steht die **Große Prüfung** (Abschnitt „Abnahme").
 
+> **Umsetzungsstand (2026-06-26):** Stufen A–F (Phasen 0–5) sind umgesetzt und je Inkrement verifiziert; die **Große Prüfung (Stufe G)** wurde gegen einen frisch migrierten Stand über den vollständigen Stack durchgeführt und ist – im Rahmen des im Code Umsetzbaren – bestanden. Bericht: [`ABNAHME.md`](ABNAHME.md). Verbleibende offene Punkte sind ausschließlich organisatorisch/extern (siehe „Organisatorisch blockierte Punkte").
+
 ## Vorgehensprinzipien (warum diese Reihenfolge)
 
 1. **Sicherheit zuerst.** Echte Authentifizierung/Autorisierung kommt vor jedem weiteren Feature – alles Spätere hängt am Tenant-/Rollen-Kontext.
