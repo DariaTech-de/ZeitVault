@@ -7,6 +7,10 @@ import { z } from 'zod';
 export const auditActionSchema = z.enum([
   'time_entry.create',
   'time_entry.correct',
+  'time.clock_in',
+  'time.break_start',
+  'time.break_end',
+  'time.clock_out',
   'absence.request',
   'absence.approve',
   'export.run',
