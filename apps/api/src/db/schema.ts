@@ -26,6 +26,8 @@ export const tenants = pgTable('tenants', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const employeeStatus = pgEnum('employee_status', ['active', 'blocked', 'anonymized']);
+
 export const employees = pgTable(
   'employees',
   {
@@ -33,6 +35,12 @@ export const employees = pgTable(
     tenantId: varchar('tenant_id', { length: 64 }).notNull(),
     personnelNumber: varchar('personnel_number', { length: 64 }).notNull(),
     displayName: varchar('display_name', { length: 200 }).notNull(),
+    // Lebenszyklus für die Retention-/Lösch-Engine (E3, Kern-Invariante 4).
+    status: employeeStatus('status').notNull().default('active'),
+    blockedAt: timestamp('blocked_at', { withTimezone: true }),
+    anonymizedAt: timestamp('anonymized_at', { withTimezone: true }),
+    deletionDueDate: date('deletion_due_date'),
+    retentionClass: varchar('retention_class', { length: 32 }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -40,6 +48,8 @@ export const employees = pgTable(
     uniqueIndex('employees_tenant_personnel_uq').on(t.tenantId, t.personnelNumber),
   ],
 );
+
+export type EmployeeRow = typeof employees.$inferSelect;
 
 /**
  * Zeiteintraege. Append-only: eine Korrektur erzeugt eine NEUE Revision mit

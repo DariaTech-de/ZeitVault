@@ -18,6 +18,9 @@ export const auditActionSchema = z.enum([
   'absence.cancel',
   'account.post',
   'export.run',
+  'retention.block',
+  'retention.anonymize',
+  'retention.purge',
   'permission.change',
 ]);
 export type AuditAction = z.infer<typeof auditActionSchema>;
