@@ -1,6 +1,15 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { asc, eq, sql } from 'drizzle-orm';
-import { type Bundesland, type Holiday, germanHolidays } from '@zeitvault/domain';
+import {
+  type Bundesland,
+  type Holiday,
+  type SurchargeResult,
+  type WorkSpan,
+  ZUSCHLAEGE_BASIS_2026_V1,
+  computeSurcharges,
+  germanHolidays,
+  isGermanHoliday,
+} from '@zeitvault/domain';
 import type { CreateWorkTimeModel } from '@zeitvault/types';
 import { TenantContextService } from '../common/tenant-context.service';
 import { type WorkTimeModelRow, workTimeModels } from '../db/schema';
@@ -50,5 +59,15 @@ export class WorkTimeService {
   /** Feiertage (rein berechnet, ohne DB) fuer Jahr + Bundesland. */
   holidays(year: number, land: Bundesland): Holiday[] {
     return germanHolidays(year, land);
+  }
+
+  /**
+   * Zuschlagsvorschau (Nacht/Sonntag/Feiertag) fuer gearbeitete Spannen anhand
+   * des Basis-Regelpakets (C3). Rein berechnet; Feiertage je Bundesland.
+   */
+  surcharges(spans: WorkSpan[], land: Bundesland): SurchargeResult[] {
+    return computeSurcharges(spans, ZUSCHLAEGE_BASIS_2026_V1, {
+      isHoliday: (iso) => isGermanHoliday(iso, land),
+    });
   }
 }

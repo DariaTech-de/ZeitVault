@@ -11,3 +11,6 @@ export * from './absence/transitions';
 export * from './absence/working-days';
 export * from './accounts/types';
 export * from './accounts/balance';
+export * from './surcharge/types';
+export * from './surcharge/compute';
+export * from './surcharge/rule-packages';

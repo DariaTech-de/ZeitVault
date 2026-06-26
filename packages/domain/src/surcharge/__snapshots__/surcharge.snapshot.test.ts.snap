@@ -1,0 +1,70 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`computeSurcharges – Snapshots realer Schichten (NW, 2026) > Dreischicht-Woche: Früh/Spät/Nacht Mo–Mi 1`] = `
+[
+  {
+    "kind": "night",
+    "label": "Nachtzuschlag",
+    "minutes": 600,
+    "ratePercent": 25,
+  },
+  {
+    "kind": "sunday",
+    "label": "Sonntagszuschlag",
+    "minutes": 0,
+    "ratePercent": 50,
+  },
+  {
+    "kind": "holiday",
+    "label": "Feiertagszuschlag",
+    "minutes": 0,
+    "ratePercent": 125,
+  },
+]
+`;
+
+exports[`computeSurcharges – Snapshots realer Schichten (NW, 2026) > Feiertagsdienst Neujahr 2026-01-01 (Do) 20:00 – 04:00 1`] = `
+[
+  {
+    "kind": "night",
+    "label": "Nachtzuschlag",
+    "minutes": 480,
+    "ratePercent": 25,
+  },
+  {
+    "kind": "sunday",
+    "label": "Sonntagszuschlag",
+    "minutes": 0,
+    "ratePercent": 50,
+  },
+  {
+    "kind": "holiday",
+    "label": "Feiertagszuschlag",
+    "minutes": 240,
+    "ratePercent": 125,
+  },
+]
+`;
+
+exports[`computeSurcharges – Snapshots realer Schichten (NW, 2026) > Wochenend-Nachtdienst: Sa 22:00 – So 06:00 und So 22:00 – Mo 06:00 1`] = `
+[
+  {
+    "kind": "night",
+    "label": "Nachtzuschlag",
+    "minutes": 960,
+    "ratePercent": 25,
+  },
+  {
+    "kind": "sunday",
+    "label": "Sonntagszuschlag",
+    "minutes": 480,
+    "ratePercent": 50,
+  },
+  {
+    "kind": "holiday",
+    "label": "Feiertagszuschlag",
+    "minutes": 0,
+    "ratePercent": 125,
+  },
+]
+`;

@@ -1,8 +1,8 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
-import type { Holiday } from '@zeitvault/domain';
-import { bundeslandSchema, createWorkTimeModelSchema } from '@zeitvault/types';
+import type { Holiday, SurchargeResult } from '@zeitvault/domain';
+import { bundeslandSchema, createWorkTimeModelSchema, surchargePreviewSchema } from '@zeitvault/types';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../common/tenant.guard';
@@ -36,5 +36,12 @@ export class WorkTimeController {
   @Get('holidays')
   holidays(@Query('year') year: string, @Query('land') land: string): Holiday[] {
     return this.workTime.holidays(yearSchema.parse(year), bundeslandSchema.parse(land));
+  }
+
+  /** Zuschlagsvorschau (Nacht/Sonntag/Feiertag) fuer gearbeitete Spannen. */
+  @Post('surcharges')
+  surcharges(@Body() body: unknown): SurchargeResult[] {
+    const input = surchargePreviewSchema.parse(body);
+    return this.workTime.surcharges(input.spans, input.land);
   }
 }
