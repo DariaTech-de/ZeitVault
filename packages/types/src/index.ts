@@ -8,3 +8,4 @@ export * from './audit-event';
 export * from './absence';
 export * from './account';
 export * from './surcharge';
+export * from './payroll';

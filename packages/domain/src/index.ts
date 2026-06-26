@@ -14,3 +14,5 @@ export * from './accounts/balance';
 export * from './surcharge/types';
 export * from './surcharge/compute';
 export * from './surcharge/rule-packages';
+export * from './payroll/types';
+export * from './payroll/mapping';

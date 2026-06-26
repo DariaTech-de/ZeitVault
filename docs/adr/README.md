@@ -19,6 +19,7 @@ Grundlage und verbindliche Quelle ist die Architektur in [`../ARCHITEKTUR.md`](.
 | [0008](0008-auth-keycloak-oidc-saml.md) | Auth via Keycloak (OIDC/SAML) | Akzeptiert |
 | [0009](0009-compliance-regel-engine.md) | Versionierte Compliance-/Regel-Engine | Akzeptiert |
 | [0010](0010-eine-codebasis-zwei-betriebsmodelle.md) | Eine Codebasis, zwei Betriebsmodelle | Akzeptiert |
+| [0011](0011-datev-mapping-geruest-generischer-export.md) | DATEV-Mapping-Geruest mit generischem Export | Akzeptiert |
 
 ## ADR-Prozess
 

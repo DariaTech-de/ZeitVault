@@ -5,6 +5,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './audit/audit.module';
 import { TenantModule } from './common/tenant.module';
 import { DbModule } from './db/db.module';
+import { ExportModule } from './export/export.module';
 import { HealthModule } from './health/health.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { StampingModule } from './stamping/stamping.module';
@@ -28,6 +29,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     AbsenceModule,
     AccountsModule,
     ReportingModule,
+    ExportModule,
   ],
 })
 export class AppModule {}

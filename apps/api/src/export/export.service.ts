@@ -1,0 +1,285 @@
+import { Inject, Injectable } from '@nestjs/common';
+import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
+import {
+  type DatevMapping,
+  type PayrollAggregate,
+  type PayrollCategory,
+  type StampEvent,
+  computeStampStatus,
+  countWorkingDays,
+  mapToLineItems,
+  toPayrollCsv,
+} from '@zeitvault/domain';
+import { AuditClient } from '../audit/audit.client';
+import { TenantContextService } from '../common/tenant-context.service';
+import {
+  type ExportJobRow,
+  type StampEventRow,
+  absenceRequests,
+  employees,
+  exportJobs,
+  stampEvents,
+} from '../db/schema';
+import { DB, type Database } from '../db/tokens';
+import { type GobdRecord, checksum, serializeGobd } from './export.serialize';
+
+const ABSENCE_CATEGORY: Record<string, PayrollCategory> = {
+  vacation: 'vacation',
+  sick: 'sick',
+  special: 'special',
+};
+
+function toStampEvent(row: StampEventRow): StampEvent {
+  return { id: row.id, kind: row.kind, at: row.occurredAt, correctsId: row.correctsEventId };
+}
+
+export interface ExportResult {
+  jobId: string;
+  kind: 'gobd_time' | 'payroll_generic';
+  format: 'csv' | 'json';
+  from: string;
+  to: string;
+  rowCount: number;
+  checksum: string;
+  content: string;
+}
+
+function toRecord(row: StampEventRow): GobdRecord {
+  return {
+    tenant_id: row.tenantId,
+    employee_id: row.employeeId,
+    event_id: row.id,
+    kind: row.kind,
+    occurred_at: row.occurredAt.toISOString(),
+    source: row.source,
+    corrects_event_id: row.correctsEventId,
+    correction_reason: row.correctionReason,
+    client_event_id: row.clientEventId,
+    created_at: row.createdAt.toISOString(),
+  };
+}
+
+@Injectable()
+export class ExportService {
+  constructor(
+    @Inject(DB) private readonly db: Database,
+    private readonly tenantContext: TenantContextService,
+    private readonly audit: AuditClient,
+  ) {}
+
+  /**
+   * Erzeugt einen reproduzierbaren GoBD-Prüfexport der Stempel-Rohdaten im
+   * Zeitraum, protokolliert ihn als unveränderlichen ExportJob mit Prüfsumme und
+   * schreibt ein AuditEvent 'export.run' (Kern-Invariante 2). Gleiche Daten +
+   * gleicher Zeitraum + gleiches Format ergeben dieselbe Prüfsumme.
+   */
+  async runGobd(from: string, to: string, format: 'csv' | 'json'): Promise<ExportResult> {
+    const ctx = this.tenantContext.require();
+    const start = new Date(`${from}T00:00:00.000Z`);
+    const endExclusive = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000);
+
+    const { job, rowCount, sum, content } = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      const rows = await tx
+        .select()
+        .from(stampEvents)
+        .where(
+          and(
+            eq(stampEvents.tenantId, ctx.tenantId),
+            gte(stampEvents.occurredAt, start),
+            lt(stampEvents.occurredAt, endExclusive),
+          ),
+        )
+        // Stabile Sortierung -> reproduzierbarer Inhalt/Prüfsumme.
+        .orderBy(asc(stampEvents.employeeId), asc(stampEvents.occurredAt), asc(stampEvents.id));
+
+      const content = serializeGobd(rows.map(toRecord), format);
+      const sum = checksum(content);
+      const inserted = await tx
+        .insert(exportJobs)
+        .values({
+          tenantId: ctx.tenantId,
+          kind: 'gobd_time',
+          periodFrom: from,
+          periodTo: to,
+          format,
+          rowCount: rows.length,
+          checksum: sum,
+          requestedBy: ctx.userId,
+        })
+        .returning();
+      return { job: inserted[0], rowCount: rows.length, sum, content };
+    });
+
+    if (!job) {
+      throw new Error('Export konnte nicht protokolliert werden.');
+    }
+    await this.audit.append({
+      tenantId: ctx.tenantId,
+      action: 'export.run',
+      actorId: ctx.userId,
+      subjectType: 'export_job',
+      subjectId: job.id,
+      payload: { kind: 'gobd_time', from, to, format, rowCount, checksum: sum },
+    });
+
+    return { jobId: job.id, kind: 'gobd_time', format, from, to, rowCount, checksum: sum, content };
+  }
+
+  /**
+   * Generischer Lohnexport (D3-Gerüst). Aggregiert je Mitarbeitenden die
+   * Arbeitszeit (Minuten) und genehmigte Abwesenheiten (Arbeitstage) im Zeitraum
+   * und bildet sie über die mandantenseitige Mapping-Tabelle auf
+   * Abrechnungsschlüssel ab. Ausgabe ist ein GENERISCHES, neutrales CSV - KEIN
+   * DATEV-Datensatzformat (CLAUDE.md §9). Wird wie der GoBD-Export als
+   * unveränderlicher ExportJob mit Prüfsumme protokolliert (export.run).
+   */
+  async runPayroll(
+    from: string,
+    to: string,
+    mapping: DatevMapping,
+  ): Promise<ExportResult & { unmapped: Array<{ category: PayrollCategory; value: number }> }> {
+    const ctx = this.tenantContext.require();
+    const aggregates = await this.aggregatePayroll(from, to);
+    const { items, unmapped } = mapToLineItems(aggregates, mapping);
+    const content = toPayrollCsv(items);
+    const sum = checksum(content);
+
+    const job = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      const inserted = await tx
+        .insert(exportJobs)
+        .values({
+          tenantId: ctx.tenantId,
+          kind: 'payroll_generic',
+          periodFrom: from,
+          periodTo: to,
+          format: 'csv',
+          rowCount: items.length,
+          checksum: sum,
+          requestedBy: ctx.userId,
+        })
+        .returning();
+      return inserted[0];
+    });
+    if (!job) {
+      throw new Error('Lohnexport konnte nicht protokolliert werden.');
+    }
+    await this.audit.append({
+      tenantId: ctx.tenantId,
+      action: 'export.run',
+      actorId: ctx.userId,
+      subjectType: 'export_job',
+      subjectId: job.id,
+      payload: { kind: 'payroll_generic', from, to, rowCount: items.length, checksum: sum },
+    });
+
+    return {
+      jobId: job.id,
+      kind: 'payroll_generic',
+      format: 'csv',
+      from,
+      to,
+      rowCount: items.length,
+      checksum: sum,
+      content,
+      unmapped,
+    };
+  }
+
+  /** Aggregiert Arbeitszeit (Minuten) und genehmigte Abwesenheiten (Tage) je Mitarbeitenden. */
+  private async aggregatePayroll(from: string, to: string): Promise<PayrollAggregate[]> {
+    const ctx = this.tenantContext.require();
+    const start = new Date(`${from}T00:00:00.000Z`);
+    const endExclusive = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000);
+
+    const { emps, stamps, absences } = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      const empRows = await tx.select().from(employees).where(eq(employees.tenantId, ctx.tenantId));
+      const stampRows = await tx
+        .select()
+        .from(stampEvents)
+        .where(
+          and(
+            eq(stampEvents.tenantId, ctx.tenantId),
+            gte(stampEvents.occurredAt, start),
+            lt(stampEvents.occurredAt, endExclusive),
+          ),
+        )
+        .orderBy(asc(stampEvents.employeeId), asc(stampEvents.occurredAt));
+      const absenceRows = await tx
+        .select()
+        .from(absenceRequests)
+        .where(
+          and(eq(absenceRequests.tenantId, ctx.tenantId), eq(absenceRequests.status, 'approved')),
+        );
+      return { emps: empRows, stamps: stampRows, absences: absenceRows };
+    });
+
+    const personnel = new Map(emps.map((e) => [e.id, e.personnelNumber]));
+
+    // Arbeitszeit je Mitarbeitenden (Summe der Tagesminuten).
+    const workedByEmployee = new Map<string, number>();
+    const byEmployeeDay = new Map<string, StampEventRow[]>();
+    for (const row of stamps) {
+      const key = `${row.employeeId}|${row.occurredAt.toISOString().slice(0, 10)}`;
+      const bucket = byEmployeeDay.get(key) ?? [];
+      bucket.push(row);
+      byEmployeeDay.set(key, bucket);
+    }
+    for (const [key, rows] of byEmployeeDay) {
+      const employeeId = key.split('|')[0]!;
+      const date = key.split('|')[1]!;
+      const status = computeStampStatus(rows.map(toStampEvent), new Date(`${date}T23:59:59.999Z`));
+      workedByEmployee.set(employeeId, (workedByEmployee.get(employeeId) ?? 0) + status.workedMinutes);
+    }
+
+    // Genehmigte Abwesenheiten je Mitarbeitenden/Kategorie (Arbeitstage im Schnitt
+    // mit dem Exportzeitraum). Ohne Standortbezug ohne Feiertagsabzug (Mo–Fr).
+    const absenceDays = new Map<string, number>();
+    for (const a of absences) {
+      const fromDate = a.fromDate > from ? a.fromDate : from;
+      const toDate = a.toDate < to ? a.toDate : to;
+      if (fromDate > toDate) continue;
+      const days = countWorkingDays(fromDate, toDate, () => false);
+      const category = ABSENCE_CATEGORY[a.type];
+      if (!category) continue;
+      const key = `${a.employeeId}|${category}`;
+      absenceDays.set(key, (absenceDays.get(key) ?? 0) + days);
+    }
+
+    const aggregates: PayrollAggregate[] = [];
+    for (const [employeeId, minutes] of workedByEmployee) {
+      const pn = personnel.get(employeeId);
+      if (pn && minutes > 0) {
+        aggregates.push({ personnelNumber: pn, category: 'work_time', value: minutes, unit: 'minutes' });
+      }
+    }
+    for (const [key, days] of absenceDays) {
+      const [employeeId, category] = key.split('|') as [string, PayrollCategory];
+      const pn = personnel.get(employeeId);
+      if (pn && days > 0) {
+        aggregates.push({ personnelNumber: pn, category, value: days, unit: 'days' });
+      }
+    }
+    // Stabile Reihenfolge für reproduzierbaren Export.
+    return aggregates.sort((a, b) =>
+      a.personnelNumber === b.personnelNumber
+        ? a.category.localeCompare(b.category)
+        : a.personnelNumber.localeCompare(b.personnelNumber),
+    );
+  }
+
+  /** Listet die protokollierten Exporte des Mandanten (ohne Inhalt). */
+  async list(): Promise<ExportJobRow[]> {
+    const ctx = this.tenantContext.require();
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      return tx
+        .select()
+        .from(exportJobs)
+        .where(eq(exportJobs.tenantId, ctx.tenantId))
+        .orderBy(asc(exportJobs.createdAt));
+    });
+  }
+}

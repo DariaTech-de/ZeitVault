@@ -147,6 +147,32 @@ export const absenceRequests = pgTable(
 export type AbsenceRequestRow = typeof absenceRequests.$inferSelect;
 export type NewAbsenceRequestRow = typeof absenceRequests.$inferInsert;
 
+export const exportKind = pgEnum('export_kind', ['gobd_time', 'payroll_generic']);
+
+/**
+ * Protokoll der GoBD-Prüfexporte (D2). Jeder Lauf ist ein unveränderlicher
+ * Eintrag mit Prüfsumme (reproduzierbar); UPDATE/DELETE werden per Trigger
+ * verhindert (Kern-Invariante 1; siehe migrations/0008_export_jobs.sql).
+ */
+export const exportJobs = pgTable(
+  'export_jobs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    kind: exportKind('kind').notNull(),
+    periodFrom: date('period_from').notNull(),
+    periodTo: date('period_to').notNull(),
+    format: varchar('format', { length: 16 }).notNull(),
+    rowCount: integer('row_count').notNull(),
+    checksum: varchar('checksum', { length: 64 }).notNull(),
+    requestedBy: varchar('requested_by', { length: 128 }).notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('export_jobs_tenant_idx').on(t.tenantId, t.createdAt)],
+);
+
+export type ExportJobRow = typeof exportJobs.$inferSelect;
+
 export const accountKind = pgEnum('account_kind', ['overtime', 'flextime', 'vacation']);
 
 /**

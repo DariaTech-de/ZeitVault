@@ -74,6 +74,19 @@ Die GoBD-Sicht auf den Export ist ergaenzend in [`GoBD.md`](GoBD.md) beschrieben
 
 ---
 
+## 4a. Implementierungsstand (Geruest, Phase 3 / D3)
+
+Implementiert ist das **Mapping-Geruest mit generischem, neutralem Export** ([ADR-0011](../adr/0011-datev-mapping-geruest-generischer-export.md)), **nicht** das konkrete DATEV-Datensatzformat (weiterhin blockiert, Abschnitt 6):
+
+- **Mapping-Tabelle** interne Kategorie (`work_time`, `vacation`, `sick`, `special`) -> `lohnart` / optional `kostenstelle` / `ausfallschluessel`, mandantenseitig konfiguriert (opake Codes, keine von ZeitVault vorgegebenen DATEV-Layouts).
+- **Generischer CSV-Export** mit fester Spaltenstruktur (`personnel_number, category, lohnart, kostenstelle, ausfallschluessel, value, unit`) - ein neutrales Interchange-Format, **kein** DATEV-LODAS-/Lohn-und-Gehalt-Datensatz.
+- **Protokollierung wie der GoBD-Export:** unveraenderlicher `ExportJob` mit Pruefsumme (reproduzierbar) und `AuditEvent` `export.run` (Kern-Invariante 2).
+- **Sichtbare Luecken:** Kategorien ohne Mapping werden als `unmapped` gemeldet, nicht stillschweigend weggelassen.
+
+Der konkrete DATEV-Export (Dateiweg LODAS/Lohn und Gehalt bzw. Lohnimport-Datenservice) wird als zusaetzlicher Serialisierer auf denselben Aggregaten/Mappings ergaenzt, **sobald** die offizielle Schnittstellenbeschreibung (Abschnitt 5) und die organisatorischen Voraussetzungen (Abschnitt 6) vorliegen.
+
+---
+
 ## 5. Abzulegende Artefakte (Checkliste)
 
 Vor dem Bau des Export-Moduls sind die folgenden Artefakte hier in `docs/compliance/` (bzw. referenziert) abzulegen. Diese Liste ist die **Definition of Ready** fuer die DATEV-Anbindung:
