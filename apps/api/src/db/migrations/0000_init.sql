@@ -71,7 +71,7 @@ CREATE POLICY time_entries_tenant_isolation ON time_entries
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION zeitvault_forbid_mutation() RETURNS trigger AS $$
 BEGIN
-  RAISE EXCEPTION 'time_entries sind unveraenderlich (GoBD): % nicht erlaubt. Korrektur erfolgt ueber eine neue Revision.', TG_OP;
+  RAISE EXCEPTION 'time_entries sind unveränderlich (GoBD): % nicht erlaubt. Korrektur erfolgt über eine neue Revision.', TG_OP;
 END;
 $$ LANGUAGE plpgsql;
 

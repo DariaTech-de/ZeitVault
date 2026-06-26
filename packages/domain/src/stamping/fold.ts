@@ -33,7 +33,7 @@ export function foldStampDay(events: readonly StampEvent[]): StampFold {
         break;
       case 'break_start':
         if (state !== 'in') {
-          throw new StampTransitionError('Pausenbeginn nur im Status "eingestempelt" moeglich.');
+          throw new StampTransitionError('Pausenbeginn nur im Status "eingestempelt" möglich.');
         }
         if (segmentStart) workIntervals.push({ start: segmentStart, end: event.at });
         state = 'break';
@@ -41,7 +41,7 @@ export function foldStampDay(events: readonly StampEvent[]): StampFold {
         break;
       case 'break_end':
         if (state !== 'break') {
-          throw new StampTransitionError('Pausenende nur waehrend einer Pause moeglich.');
+          throw new StampTransitionError('Pausenende nur während einer Pause möglich.');
         }
         if (segmentStart) breakIntervals.push({ start: segmentStart, end: event.at });
         state = 'in';
@@ -49,7 +49,7 @@ export function foldStampDay(events: readonly StampEvent[]): StampFold {
         break;
       case 'clock_out':
         if (state !== 'in') {
-          throw new StampTransitionError('Ausstempeln nur im Status "eingestempelt" moeglich.');
+          throw new StampTransitionError('Ausstempeln nur im Status "eingestempelt" möglich.');
         }
         if (segmentStart) workIntervals.push({ start: segmentStart, end: event.at });
         state = 'out';

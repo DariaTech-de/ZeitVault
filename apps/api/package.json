@@ -9,7 +9,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --passWithNoTests",
     "start": "node dist/main.js",
-    "dev": "tsx watch src/main.ts",
+    "dev": "nest start --watch",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts"
   },
@@ -27,6 +27,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
     "@types/express": "^5.0.0",
     "@types/node": "^24.0.0",
     "@types/pg": "^8.11.0",

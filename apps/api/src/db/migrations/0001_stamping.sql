@@ -29,7 +29,7 @@ CREATE POLICY stamp_events_tenant_isolation ON stamp_events
 -- Generischer Append-only-Schutz (nutzt den Tabellennamen in der Meldung).
 CREATE OR REPLACE FUNCTION zeitvault_append_only() RETURNS trigger AS $$
 BEGIN
-  RAISE EXCEPTION '% ist append-only: % nicht erlaubt. Korrektur erfolgt ueber ein neues Ereignis.', TG_TABLE_NAME, TG_OP;
+  RAISE EXCEPTION '% ist append-only: % nicht erlaubt. Korrektur erfolgt über ein neues Ereignis.', TG_TABLE_NAME, TG_OP;
 END;
 $$ LANGUAGE plpgsql;
 

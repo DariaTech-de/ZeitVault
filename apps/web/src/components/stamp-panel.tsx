@@ -121,7 +121,7 @@ export function StampPanel() {
               {findings.map((finding, index) => (
                 <li key={`${finding.code}-${index}`} className="flex items-center gap-2 text-sm">
                   <Badge variant={finding.severity === 'violation' ? 'violation' : 'warning'}>
-                    {finding.severity === 'violation' ? 'Verstoss' : 'Warnung'}
+                    {finding.severity === 'violation' ? 'Verstoß' : 'Warnung'}
                   </Badge>
                   <span className="text-slate-700">{finding.message}</span>
                 </li>

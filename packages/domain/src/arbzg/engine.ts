@@ -40,7 +40,7 @@ export function evaluateDailyWorkTime(
       {
         code: 'MAX_DAILY_WORKTIME_EXTENDED_EXCEEDED',
         severity: 'violation',
-        message: `Taegliche Hoechstarbeitszeit von ${params.maxDailyMinutesExtended / 60} h ueberschritten.`,
+        message: `Tägliche Höchstarbeitszeit von ${params.maxDailyMinutesExtended / 60} h überschritten.`,
         details: { workedMinutes, limitMinutes: params.maxDailyMinutesExtended },
       },
     ];
@@ -50,7 +50,7 @@ export function evaluateDailyWorkTime(
       {
         code: 'MAX_DAILY_WORKTIME_EXCEEDED',
         severity: 'warning',
-        message: `Regulaere taegliche Arbeitszeit von ${params.maxDailyMinutesStandard / 60} h ueberschritten (Ausgleich erforderlich).`,
+        message: `Reguläre tägliche Arbeitszeit von ${params.maxDailyMinutesStandard / 60} h überschritten (Ausgleich erforderlich).`,
         details: { workedMinutes, limitMinutes: params.maxDailyMinutesStandard },
       },
     ];
