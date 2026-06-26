@@ -6,24 +6,32 @@
 
 **Offline-First (MUSS):** Ein-/Ausstempeln funktioniert ohne Netz und synchronisiert konfliktfrei über eine lokale Queue gegen idempotente Sync-Endpunkte nach. GPS/Geofencing ist standardmäßig deaktiviert und nur per Betriebsvereinbarung aktivierbar (Mitbestimmung BetrVG Paragraf 87).
 
-**Status:** Gerüst (B3). Vorhanden: Offline-First-Stempeloberfläche (`App.tsx`)
-mit Kommen/Gehen/Pausen, lokaler Queue (AsyncStorage) und **idempotenter
-Synchronisation** gegen `POST /api/stamp/sync`. Die Queue-Logik (Einreihen,
-Idempotenz, Sync-Ergebnis anwenden) liegt geteilt und **getestet** in
-`packages/domain` (`sync/queue.ts`); die Server-Idempotenz (clientEventId,
-(tenant_id, client_event_id) eindeutig) ist gegen echtes Postgres verifiziert.
+**Status:** Funktional und **im Workspace typgeprüft** (`pnpm typecheck`). Enthält:
 
-> Diese App ist **vom pnpm-Workspace ausgenommen** (`pnpm-workspace.yaml`), damit
-> der verifizierte Build/CI nicht von der Expo-Toolchain abhängt und weil sie in
-> dieser Umgebung **nicht auf einem Emulator lauffähig/verifizierbar** ist
-> (gehört in die manuelle Abnahme). Aktivieren:
->
-> 1. In `pnpm-workspace.yaml` die Zeile `"!apps/mobile"` entfernen.
-> 2. `pnpm install` (zieht Expo SDK 56 / React Native 0.85).
-> 3. `pnpm --filter @zeitvault/mobile start` und im Emulator/Gerät öffnen.
+- **Anmeldung:** OIDC (Keycloak, Authorization Code + PKCE über
+  `expo-auth-session`) im Modus `oidc`; im Modus `dev` (lokal/Sandbox) eine
+  Demo-Identität über Header. Steuerung via `EXPO_PUBLIC_AUTH_MODE`. Der
+  angemeldete Mitarbeiter wird über `GET /api/me` aufgelöst (`src/auth.ts`).
+- **Tagesübersicht:** aktueller Stempelstatus, gearbeitete/pausierte Minuten und
+  ArbZG-Befunde aus `GET /api/stamp/today` (`src/api.ts`).
+- **Offline-First-Stempeln:** Kommen/Gehen/Pausen ohne Netz, lokale Queue
+  (AsyncStorage) und **idempotente Synchronisation** gegen `POST /api/stamp/sync`.
+  Die Queue-Logik liegt geteilt und **getestet** in `packages/domain`
+  (`sync/queue.ts`); die Server-Idempotenz ist gegen echtes Postgres verifiziert.
+- **Biometrisches Entsperren:** `expo-local-authentication` (best effort; ohne
+  Hardware/Enrollment übersprungen).
 
-**Noch offen:** OIDC-Login (Keycloak) statt Demo-Identität, biometrisches
-Entsperren, Zertifikats-Pinning, Push, Salden/Anträge. GPS/Geofencing bleibt
+> **Verifikationsgrenze dieser Umgebung:** Typecheck und Lint laufen mit; ein
+> tatsächlicher **Emulator-/Gerätelauf** (sowie ein realer OIDC-Login gegen
+> Keycloak) gehört in die manuelle Abnahme – dafür `pnpm --filter
+> @zeitvault/mobile start` ausführen und im Emulator/Gerät öffnen.
+
+**Konfiguration (`EXPO_PUBLIC_*`):** `API_BASE_URL` (Android-Emulator:
+`http://10.0.2.2:3000`), `AUTH_MODE` (`oidc`/`dev`), `OIDC_ISSUER`,
+`OIDC_CLIENT_ID`, `TENANT_ID`, `USER_ID` (Dev-Subject). GPS/Geofencing bleibt
 standardmäßig deaktiviert (BetrVG Paragraf 87).
+
+**Noch offen (extern):** Zertifikats-Pinning, Push-Benachrichtigungen, Salden-/
+Antragsansichten, EAS-Buildpipeline.
 
 **Architektur:** siehe [Paragraf 13 – Mobile Apps](../../docs/ARCHITEKTUR.md#13-mobile-apps-mitarbeitende).

@@ -1,7 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { StatusBar } from 'expo-status-bar';
+import * as LocalAuthentication from 'expo-local-authentication';
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import {
   applySyncResults,
   clearSynced,
@@ -10,13 +11,9 @@ import {
   type QueuedStamp,
   type StampKind,
 } from '@zeitvault/domain';
-
-// Im Emulator: Android -> 10.0.2.2, iOS-Simulator -> localhost. Produktion: HTTPS.
-const API_BASE = process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://10.0.2.2:3000';
-const TENANT_ID = process.env.EXPO_PUBLIC_TENANT_ID ?? 'default';
-const USER_ID = process.env.EXPO_PUBLIC_USER_ID ?? '00000000-0000-0000-0000-000000000001';
-const EMPLOYEE_ID = process.env.EXPO_PUBLIC_EMPLOYEE_ID ?? '00000000-0000-0000-0000-000000000001';
-const STORAGE_KEY = 'zeitvault.queue';
+import { fetchToday, syncStamps, type Session, type TodayResponse } from './src/api';
+import { useAuth } from './src/auth';
+import { QUEUE_STORAGE_KEY } from './src/config';
 
 function uuidv4(): string {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
@@ -26,21 +23,64 @@ function uuidv4(): string {
   });
 }
 
-export default function App() {
+const STATE_LABEL: Record<TodayResponse['status']['state'], string> = {
+  out: 'Ausgestempelt',
+  in: 'Eingestempelt',
+  break: 'In Pause',
+};
+
+function formatMinutes(total: number): string {
+  return `${Math.floor(total / 60)} h ${String(Math.round(total % 60)).padStart(2, '0')} min`;
+}
+
+/** Biometrisches Entsperren (best effort); ohne verfügbare Hardware übersprungen. */
+function useBiometricGate(): boolean {
+  const [unlocked, setUnlocked] = useState(false);
+  useEffect(() => {
+    void (async () => {
+      try {
+        const has = await LocalAuthentication.hasHardwareAsync();
+        const enrolled = await LocalAuthentication.isEnrolledAsync();
+        if (!has || !enrolled) {
+          setUnlocked(true);
+          return;
+        }
+        const res = await LocalAuthentication.authenticateAsync({
+          promptMessage: 'ZeitVault entsperren',
+        });
+        setUnlocked(res.success);
+      } catch {
+        setUnlocked(true);
+      }
+    })();
+  }, []);
+  return unlocked;
+}
+
+function MainScreen({ session, employeeId }: { session: Session; employeeId: string }) {
   const [queue, setQueue] = useState<QueuedStamp[]>([]);
+  const [today, setToday] = useState<TodayResponse | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    AsyncStorage.getItem(STORAGE_KEY)
+    AsyncStorage.getItem(QUEUE_STORAGE_KEY)
       .then((raw) => {
         if (raw) setQueue(JSON.parse(raw) as QueuedStamp[]);
       })
       .catch(() => undefined);
   }, []);
 
+  const refreshToday = useCallback(() => {
+    fetchToday(session, employeeId)
+      .then(setToday)
+      .catch(() => setToday(null));
+  }, [session, employeeId]);
+
+  useEffect(refreshToday, [refreshToday]);
+
   const persist = useCallback(async (next: QueuedStamp[]) => {
     setQueue(next);
-    await AsyncStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(QUEUE_STORAGE_KEY, JSON.stringify(next));
   }, []);
 
   const stamp = useCallback(
@@ -60,27 +100,14 @@ export default function App() {
     if (pending.length === 0) return;
     setBusy(true);
     try {
-      const res = await fetch(`${API_BASE}/api/stamp/sync`, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-          'x-tenant-id': TENANT_ID,
-          'x-user-id': USER_ID,
-          'x-roles': 'employee',
-        },
-        body: JSON.stringify({
-          employeeId: EMPLOYEE_ID,
-          items: pending.map((p) => ({
-            clientEventId: p.clientEventId,
-            kind: p.kind,
-            occurredAt: p.occurredAt,
-          })),
-        }),
-      });
-      const ok = res.ok;
-      const results = pending.map((p) => ({ clientEventId: p.clientEventId, ok }));
+      await syncStamps(
+        session,
+        employeeId,
+        pending.map((p) => ({ clientEventId: p.clientEventId, kind: p.kind, occurredAt: p.occurredAt })),
+      );
+      const results = pending.map((p) => ({ clientEventId: p.clientEventId, ok: true }));
       await persist(clearSynced(applySyncResults(queue, results)));
-      if (!ok) Alert.alert('Sync fehlgeschlagen', `HTTP ${res.status}`);
+      refreshToday();
     } catch {
       const results = pending.map((p) => ({ clientEventId: p.clientEventId, ok: false }));
       await persist(applySyncResults(queue, results));
@@ -88,7 +115,7 @@ export default function App() {
     } finally {
       setBusy(false);
     }
-  }, [queue, persist]);
+  }, [queue, persist, session, employeeId, refreshToday]);
 
   const pendingCount = pendingItems(queue).length;
 
@@ -96,7 +123,20 @@ export default function App() {
     <View style={styles.container}>
       <StatusBar style="auto" />
       <Text style={styles.title}>ZeitVault</Text>
-      <Text style={styles.subtitle}>Offline-Erfassung · {pendingCount} ausstehend</Text>
+      <Text style={styles.subtitle}>
+        {today ? STATE_LABEL[today.status.state] : 'Lädt …'} · {pendingCount} ausstehend
+      </Text>
+      {today && (
+        <Text style={styles.meta}>
+          Arbeit {formatMinutes(today.status.workedMinutes)} · Pause{' '}
+          {formatMinutes(today.status.breakMinutes)}
+        </Text>
+      )}
+      {today?.findings.map((f, i) => (
+        <Text key={`${f.code}-${i}`} style={f.severity === 'violation' ? styles.violation : styles.warning}>
+          {f.severity === 'violation' ? 'Verstoß' : 'Warnung'}: {f.message}
+        </Text>
+      ))}
 
       <View style={styles.row}>
         <Pressable style={[styles.button, styles.primary]} onPress={() => stamp('clock_in')}>
@@ -137,11 +177,43 @@ export default function App() {
   );
 }
 
+export default function App() {
+  const unlocked = useBiometricGate();
+  const { status, session, employeeId, login } = useAuth();
+
+  if (!unlocked || status === 'loading') {
+    return (
+      <View style={styles.center}>
+        <ActivityIndicator />
+        <Text style={styles.meta}>Wird geladen …</Text>
+      </View>
+    );
+  }
+
+  if (status === 'unauthenticated' || !session || !employeeId) {
+    return (
+      <View style={styles.center}>
+        <Text style={styles.title}>ZeitVault</Text>
+        <Text style={styles.subtitle}>Bitte über den Unternehmens-Login anmelden.</Text>
+        <Pressable style={[styles.button, styles.primary]} onPress={login}>
+          <Text style={styles.buttonText}>Anmelden</Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  return <MainScreen session={session} employeeId={employeeId} />;
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, padding: 24, paddingTop: 64, backgroundColor: '#f8fafc' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, padding: 24 },
   title: { fontSize: 28, fontWeight: '700', color: '#0f172a' },
-  subtitle: { fontSize: 14, color: '#475569', marginBottom: 24 },
-  row: { flexDirection: 'row', gap: 12, marginBottom: 12 },
+  subtitle: { fontSize: 14, color: '#475569', marginBottom: 12 },
+  meta: { fontSize: 13, color: '#475569' },
+  warning: { fontSize: 13, color: '#b45309', marginTop: 4 },
+  violation: { fontSize: 13, color: '#b91c1c', marginTop: 4 },
+  row: { flexDirection: 'row', gap: 12, marginBottom: 12, marginTop: 12 },
   button: { flex: 1, borderRadius: 10, paddingVertical: 18, alignItems: 'center' },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   primary: { backgroundColor: '#0f172a' },
