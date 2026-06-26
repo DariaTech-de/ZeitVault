@@ -12,9 +12,7 @@ import {
   fetchToday,
   stamp,
 } from '@/lib/api';
-
-const EMPLOYEE_ID =
-  process.env.NEXT_PUBLIC_EMPLOYEE_ID ?? '00000000-0000-0000-0000-000000000001';
+import { getIdentity, type Identity } from '@/lib/identity';
 
 const STATE_LABEL: Record<StampState, string> = {
   out: 'Ausgestempelt',
@@ -29,14 +27,15 @@ function formatMinutes(total: number): string {
 }
 
 export function StampPanel() {
+  const [identity, setIdentityState] = useState<Identity | null>(null);
   const [status, setStatus] = useState<StampStatus | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (id: Identity) => {
     try {
-      const data = await fetchToday(EMPLOYEE_ID);
+      const data = await fetchToday(id);
       setStatus(data.status);
       setFindings(data.findings);
       setError(null);
@@ -46,22 +45,28 @@ export function StampPanel() {
   }, []);
 
   useEffect(() => {
-    void refresh();
+    const id = getIdentity();
+    setIdentityState(id);
+    void refresh(id);
   }, [refresh]);
 
-  const onStamp = useCallback(async (action: StampAction) => {
-    setPending(true);
-    try {
-      const data = await stamp(action, EMPLOYEE_ID);
-      setStatus(data.status);
-      setFindings(data.findings);
-      setError(null);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Stempelung fehlgeschlagen.');
-    } finally {
-      setPending(false);
-    }
-  }, []);
+  const onStamp = useCallback(
+    async (action: StampAction) => {
+      if (!identity) return;
+      setPending(true);
+      try {
+        const data = await stamp(identity, action);
+        setStatus(data.status);
+        setFindings(data.findings);
+        setError(null);
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Stempelung fehlgeschlagen.');
+      } finally {
+        setPending(false);
+      }
+    },
+    [identity],
+  );
 
   const state: StampState = status?.state ?? 'out';
 

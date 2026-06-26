@@ -1,9 +1,8 @@
-// API-Client fuer apps/api. Im Scaffold werden Tenant/User als Header gesendet;
-// im Zielbild stammt der Kontext aus dem verifizierten OIDC-Token (ADR-0008).
+// API-Client fuer apps/api. Auth-Header stammen aus der (Demo-)Identitaet;
+// im Zielbild ein OIDC-Bearer-Token (ADR-0008).
+import { type Identity, authHeaders } from './identity';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://localhost:3000';
-const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID ?? 'default';
-const USER_ID = process.env.NEXT_PUBLIC_USER_ID ?? '00000000-0000-0000-0000-000000000001';
 
 export type StampState = 'out' | 'in' | 'break';
 export type FindingSeverity = 'warning' | 'violation';
@@ -26,32 +25,66 @@ export interface TodayResponse {
   findings: Finding[];
 }
 
-function headers(): HeadersInit {
-  return {
-    'content-type': 'application/json',
-    'x-tenant-id': TENANT_ID,
-    'x-user-id': USER_ID,
-  };
+export interface DayEvent {
+  id: string;
+  kind: string;
+  occurredAt: string;
+  correctsEventId: string | null;
+  correctionReason: string | null;
 }
 
-export async function fetchToday(employeeId: string): Promise<TodayResponse> {
-  const url = `${API_BASE}/api/stamp/today?employeeId=${encodeURIComponent(employeeId)}`;
-  const res = await fetch(url, { headers: headers(), cache: 'no-store' });
-  if (!res.ok) {
-    throw new Error(`HTTP ${res.status}`);
-  }
-  return res.json() as Promise<TodayResponse>;
+export interface DayListing {
+  events: DayEvent[];
+  status: StampStatus;
+  findings: Finding[];
 }
 
-export async function stamp(action: StampAction, employeeId: string): Promise<TodayResponse> {
-  const res = await fetch(`${API_BASE}/api/stamp/${action}`, {
-    method: 'POST',
-    headers: headers(),
-    body: JSON.stringify({ employeeId, source: 'web' }),
+export interface EmployeeSummary {
+  id: string;
+  personnelNumber: string;
+  displayName: string;
+}
+
+async function request<T>(identity: Identity, path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: { ...authHeaders(identity), ...(init?.headers ?? {}) },
+    cache: 'no-store',
   });
   if (!res.ok) {
     const detail = await res.text();
     throw new Error(`HTTP ${res.status}: ${detail}`);
   }
-  return res.json() as Promise<TodayResponse>;
+  return res.json() as Promise<T>;
+}
+
+export function fetchToday(identity: Identity): Promise<TodayResponse> {
+  return request(identity, `/api/stamp/today?employeeId=${encodeURIComponent(identity.employeeId)}`);
+}
+
+export function stamp(identity: Identity, action: StampAction): Promise<TodayResponse> {
+  return request(identity, `/api/stamp/${action}`, {
+    method: 'POST',
+    body: JSON.stringify({ employeeId: identity.employeeId, source: 'web' }),
+  });
+}
+
+export function fetchEmployees(identity: Identity): Promise<EmployeeSummary[]> {
+  return request(identity, '/api/admin/employees');
+}
+
+export function fetchDayEvents(identity: Identity, employeeId: string): Promise<DayListing> {
+  return request(identity, `/api/stamp/events?employeeId=${encodeURIComponent(employeeId)}`);
+}
+
+export function postCorrection(
+  identity: Identity,
+  eventId: string,
+  occurredAt: string,
+  correctionReason: string,
+): Promise<unknown> {
+  return request(identity, '/api/stamp/corrections', {
+    method: 'POST',
+    body: JSON.stringify({ eventId, occurredAt, correctionReason }),
+  });
 }
