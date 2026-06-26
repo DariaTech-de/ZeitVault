@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "ZeitVault",
+    "slug": "zeitvault",
+    "scheme": "zeitvault",
+    "version": "0.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "ios": { "supportsTablet": true },
+    "android": {}
+  }
+}

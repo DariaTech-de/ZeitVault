@@ -1,6 +1,6 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
-import { stampCorrectionSchema, stampSchema } from '@zeitvault/types';
+import { stampCorrectionSchema, stampSchema, syncStampsSchema } from '@zeitvault/types';
 import { TenantGuard } from '../common/tenant.guard';
 import { DayListing, StampResult, StampingService } from './stamping.service';
 
@@ -56,5 +56,12 @@ export class StampingController {
   @Get('events')
   async events(@Query('employeeId') employeeId: string): Promise<DayListing> {
     return this.stamping.listDay(employeeId);
+  }
+
+  /** Idempotente Batch-Synchronisation der Offline-Queue (Mobile, B3). */
+  @Post('sync')
+  async sync(@Body() body: unknown): Promise<{ accepted: number; duplicates: number }> {
+    const input = syncStampsSchema.parse(body);
+    return this.stamping.sync(input);
   }
 }

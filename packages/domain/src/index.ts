@@ -6,3 +6,4 @@ export * from './stamping/fold';
 export * from './stamping/evaluate';
 export * from './calendar/holidays';
 export * from './calendar/worktime';
+export * from './sync/queue';

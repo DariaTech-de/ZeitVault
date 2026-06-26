@@ -263,4 +263,96 @@ export class StampingService {
       findings: evaluateStampDay(events, ARBZG_2026_V1, now, { date: isoDate(now) }),
     };
   }
+
+  /**
+   * Idempotente Batch-Synchronisation der Offline-Queue (B3). Ereignisse mit
+   * bereits bekannter clientEventId werden uebersprungen (keine Dubletten); die
+   * resultierende Tagesfolge wird je Tag auf Gueltigkeit geprueft. Jede neu
+   * uebernommene Stempelung erzeugt ein AuditEvent (Kern-Invariante 2).
+   */
+  async sync(input: {
+    employeeId: string;
+    items: ReadonlyArray<{ clientEventId: string; kind: StampKind; occurredAt: string }>;
+  }): Promise<{ accepted: number; duplicates: number }> {
+    const ctx = this.tenantContext.require();
+    const acceptedItems: Array<{ kind: StampKind; id: string }> = [];
+    let summary = { accepted: 0, duplicates: 0 };
+
+    try {
+      summary = await this.db.transaction(async (tx) => {
+        await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+        const byDay = new Map<string, Array<{ clientEventId: string; kind: StampKind; occurredAt: string }>>();
+        for (const item of input.items) {
+          const day = new Date(item.occurredAt).toISOString().slice(0, 10);
+          const bucket = byDay.get(day) ?? [];
+          bucket.push(item);
+          byDay.set(day, bucket);
+        }
+
+        let accepted = 0;
+        let duplicates = 0;
+        for (const dayItems of byDay.values()) {
+          const first = dayItems[0];
+          if (!first) continue;
+          const existing = await tx
+            .select()
+            .from(stampEvents)
+            .where(dayWhere(ctx.tenantId, input.employeeId, new Date(first.occurredAt)))
+            .orderBy(asc(stampEvents.occurredAt));
+          const knownClientIds = new Set(
+            existing.map((r) => r.clientEventId).filter((x): x is string => x !== null),
+          );
+          const fresh = dayItems.filter((it) => !knownClientIds.has(it.clientEventId));
+          duplicates += dayItems.length - fresh.length;
+
+          const candidate: StampEvent[] = [
+            ...existing.map(toStampEvent),
+            ...fresh.map((it) => ({ kind: it.kind, at: new Date(it.occurredAt) })),
+          ];
+          // Wirft StampTransitionError bei ungueltiger Tagesfolge -> 409.
+          foldStampDay(resolveEffectiveEvents(candidate));
+
+          for (const it of fresh) {
+            const inserted = await tx
+              .insert(stampEvents)
+              .values({
+                tenantId: ctx.tenantId,
+                employeeId: input.employeeId,
+                kind: it.kind,
+                occurredAt: new Date(it.occurredAt),
+                source: 'mobile',
+                clientEventId: it.clientEventId,
+              })
+              .onConflictDoNothing()
+              .returning();
+            const row = inserted[0];
+            if (row) {
+              accepted += 1;
+              acceptedItems.push({ kind: it.kind, id: row.id });
+            } else {
+              duplicates += 1;
+            }
+          }
+        }
+        return { accepted, duplicates };
+      });
+    } catch (err) {
+      if (err instanceof StampTransitionError) {
+        throw new ConflictException(err.message);
+      }
+      throw err;
+    }
+
+    for (const accepted of acceptedItems) {
+      await this.audit.append({
+        tenantId: ctx.tenantId,
+        action: STAMP_AUDIT_ACTION[accepted.kind],
+        actorId: ctx.userId,
+        subjectType: 'stamp_event',
+        subjectId: accepted.id,
+        payload: { source: 'mobile', sync: true },
+      });
+    }
+    return summary;
+  }
 }

@@ -96,6 +96,8 @@ export const stampEvents = pgTable(
     // Korrektur: verweist auf das ueberschriebene Ereignis (append-only, B1).
     correctsEventId: uuid('corrects_event_id'),
     correctionReason: text('correction_reason'),
+    // Idempotenzschluessel fuer Offline-Sync (B3); NULL bei Server-Erfassung.
+    clientEventId: uuid('client_event_id'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
