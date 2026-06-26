@@ -4,3 +4,5 @@ export * from './arbzg/engine';
 export * from './stamping/types';
 export * from './stamping/fold';
 export * from './stamping/evaluate';
+export * from './calendar/holidays';
+export * from './calendar/worktime';

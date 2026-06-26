@@ -1,4 +1,5 @@
 import {
+  date,
   index,
   integer,
   pgEnum,
@@ -105,3 +106,20 @@ export const stampEvents = pgTable(
 
 export type StampEventRow = typeof stampEvents.$inferSelect;
 export type NewStampEventRow = typeof stampEvents.$inferInsert;
+
+/** Versionierte Arbeitszeitmodelle (Sollzeit je Wochentag in Minuten). */
+export const workTimeModels = pgTable(
+  'work_time_models',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    name: varchar('name', { length: 200 }).notNull(),
+    validFrom: date('valid_from').notNull(),
+    validTo: date('valid_to'),
+    targetMinutes: integer('target_minutes').array().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('work_time_models_tenant_idx').on(t.tenantId)],
+);
+
+export type WorkTimeModelRow = typeof workTimeModels.$inferSelect;

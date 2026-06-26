@@ -6,6 +6,7 @@ import { DbModule } from './db/db.module';
 import { HealthModule } from './health/health.module';
 import { StampingModule } from './stamping/stamping.module';
 import { TimeModule } from './time/time.module';
+import { WorkTimeModule } from './work-time/work-time.module';
 
 /**
  * Modularer Monolith (ARCHITEKTUR.md Paragraf 6). Weitere Domaenen-Module
@@ -20,6 +21,7 @@ import { TimeModule } from './time/time.module';
     TimeModule,
     StampingModule,
     AdminModule,
+    WorkTimeModule,
   ],
 })
 export class AppModule {}
