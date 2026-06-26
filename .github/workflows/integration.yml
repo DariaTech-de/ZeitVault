@@ -1,0 +1,57 @@
+name: Integration
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  integration:
+    name: RLS / Append-only (real Postgres)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js (LTS)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # Nicht-Superuser-Rolle als Tabelleneigentuemer, damit FORCE RLS greift
+      # (ein Superuser wuerde RLS umgehen). Spiegelt das Produktions-Setup.
+      - name: Provision app role + database
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE zeitvault LOGIN PASSWORD 'zeitvault';" \
+            -c "CREATE DATABASE zeitvault OWNER zeitvault;"
+
+      - name: Integration tests (RLS, Append-only)
+        env:
+          DATABASE_URL: postgres://zeitvault:zeitvault@localhost:5432/zeitvault
+        run: pnpm --filter @zeitvault/api test:integration
