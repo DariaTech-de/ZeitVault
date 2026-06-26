@@ -1,0 +1,6 @@
+{
+  "//": "Typecheck nur ueber src/ - unabhaengig von build-generierten Next-Typen (.next/types). Der vollstaendige Typecheck inkl. App-Router-Typen erfolgt in `next build`.",
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*.ts", "src/**/*.tsx"],
+  "exclude": ["node_modules", ".next"]
+}
