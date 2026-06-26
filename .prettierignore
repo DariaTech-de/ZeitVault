@@ -1,0 +1,8 @@
+# Build-Ausgaben
+**/dist/**
+**/.next/**
+**/.turbo/**
+node_modules/**
+
+# Helm-Templates sind Go-getemplatetes YAML und nicht von Prettier parsbar.
+infra/helm/templates/**

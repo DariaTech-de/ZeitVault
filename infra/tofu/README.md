@@ -6,6 +6,8 @@
 
 **Architektur-Hinweis:** Lizenz-Stabilität ist als Update-Risiko mitgedacht; foundation-geführte, permissive Bausteine vermeiden erzwungene Wechsel.
 
-**Status:** Platzhalter – Implementierung folgt in Phase 0 gemäß Paragraf 18.
+**Status:** Provider-neutrales Modul-Gerüst vorhanden (Phase 4 / E1): `versions.tf` (OpenTofu ≥ 1.12, State-Verschlüsselungsrahmen), `variables.tf` (inkl. erzwungener EU/DE-Datenresidenz), `main.tf` (Gerüst für Kubernetes, managed PostgreSQL 18, Objektspeicher/WORM, Netzwerk/WAF) und `outputs.tf`. Die konkreten Provider-/Modulblöcke werden je gewähltem EU-Provider gesetzt; Secrets ausschließlich über OpenBao/SOPS (ADR-0007).
+
+Lokale Prüfung: `tofu fmt -check` bzw. `tofu validate` (nach Setzen der Provider).
 
 **Architektur:** siehe [Paragraf 16 – Infrastruktur & DevOps](../../docs/ARCHITEKTUR.md#16-infrastruktur--devops) und [ADR-0007 (OSI-/permissive Bausteine)](../../docs/adr/0007-osi-permissive-bausteine.md).

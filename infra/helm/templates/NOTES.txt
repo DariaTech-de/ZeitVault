@@ -1,0 +1,12 @@
+ZeitVault wurde im Modus "{{ .Values.operationMode }}" installiert (Release {{ .Release.Name }}).
+
+Komponenten:
+  - API     : Service {{ include "zeitvault.fullname" . }}-api    (Port {{ .Values.api.port }})
+  - Ledger  : Service {{ include "zeitvault.fullname" . }}-ledger (Port {{ .Values.ledger.port }})
+
+Hinweise:
+  - Geheimnisse stammen aus dem Secret "{{ .Values.existingSecret }}" (über OpenBao/
+    External-Secrets befüllt). Keine Klartext-Secrets in den Values (ADR-0007).
+  - PostgreSQL (RLS), Valkey, Keycloak und Objektspeicher werden als externe
+    Abhängigkeiten erwartet; RLS bleibt in beiden Betriebsmodellen aktiv (ADR-0004).
+  - Images in Produktion per Digest pinnen und mit Cosign verifizieren (ADR-0003).

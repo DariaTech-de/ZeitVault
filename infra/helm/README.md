@@ -6,6 +6,8 @@
 
 **Architektur-Hinweis:** Beide Betriebsmodelle nutzen identische Images; Mandantenfähigkeit über `tenant_id` + RLS bleibt durchgängig aktiv.
 
-**Status:** Platzhalter – Implementierung folgt in Phase 0 gemäß Paragraf 18.
+**Status:** Basis-Chart vorhanden (Phase 4 / E1). Enthält `Chart.yaml`, `values.yaml` und Templates für API- und Ledger-Deployment inkl. Service, Health-/Readiness-Probes, Security-Context (non-root, read-only FS, gedroppte Capabilities) und Konfiguration. Geheimnisse stammen aus einem extern verwalteten Secret (`existingSecret`, über OpenBao/External-Secrets befüllt) – keine Klartext-Secrets in den Values (ADR-0007). SaaS-Flags/Betriebsmodell über Values (ADR-0010). PostgreSQL, Valkey, Keycloak und Objektspeicher werden als externe Abhängigkeiten erwartet.
+
+Lokale Prüfung: `helm lint infra/helm` bzw. `helm template infra/helm`.
 
 **Architektur:** siehe [Paragraf 16 – Infrastruktur & DevOps](../../docs/ARCHITEKTUR.md#16-infrastruktur--devops).

@@ -1,0 +1,51 @@
+# ZeitVault Observability-Stack (Overlay; ARCHITEKTUR.md Paragraf 16).
+# Getrennte Ops-Tools, datensparsam (ADR-0007/Paragraf 12): OpenTelemetry-Collector,
+# Prometheus (Metriken), Loki (Logs), Grafana (Dashboards).
+# Start zusätzlich zum Hauptstack:
+#   docker compose -f docker-compose.yml -f docker-compose.observability.yml up
+# Die App exportiert via OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4318.
+name: zeitvault-observability
+
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.110.0
+    command: ['--config=/etc/otelcol/config.yaml']
+    volumes:
+      - ./observability/otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - '4317:4317' # OTLP gRPC
+      - '4318:4318' # OTLP HTTP
+
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    volumes:
+      - ./observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - promdata:/prometheus
+    ports:
+      - '9090:9090'
+
+  loki:
+    image: grafana/loki:3.1.1
+    command: ['-config.file=/etc/loki/local-config.yaml']
+    ports:
+      - '3100:3100'
+    volumes:
+      - lokidata:/loki
+
+  grafana:
+    image: grafana/grafana:11.2.0
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_AUTH_ANONYMOUS_ENABLED: 'false'
+    ports:
+      - '3300:3000'
+    volumes:
+      - grafanadata:/var/lib/grafana
+    depends_on:
+      - prometheus
+      - loki
+
+volumes:
+  promdata:
+  lokidata:
+  grafanadata:

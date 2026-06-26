@@ -1,0 +1,15 @@
+apiVersion: v2
+name: zeitvault
+description: >-
+  ZeitVault - Enterprise-Zeiterfassung (DariaTech). Betriebsmodell "groß" auf
+  Kubernetes. Deployt API (NestJS), getrennten Audit-Ledger-Service und Web.
+  Identische Images wie im Compose-Betrieb; Unterschiede nur über Values
+  (ADR-0010). PostgreSQL, Valkey, Keycloak, OpenBao und Objektspeicher werden
+  als externe Abhängigkeiten erwartet (managed bzw. eigene Charts).
+type: application
+# Chart-Version (SemVer des Charts) und App-Version (Produktstand).
+version: 0.1.0
+appVersion: '0.0.0'
+kubeVersion: '>=1.29.0-0'
+maintainers:
+  - name: DariaTech

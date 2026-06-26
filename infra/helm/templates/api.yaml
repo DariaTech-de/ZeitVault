@@ -1,0 +1,92 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "zeitvault.fullname" . }}-api
+  labels:
+    {{- include "zeitvault.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: {{ .Release.Name }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      labels:
+        {{- include "zeitvault.labels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "zeitvault.image" (merge (dict "component" "api") .) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - containerPort: {{ .Values.api.port }}
+          env:
+            - name: PORT
+              value: {{ .Values.api.port | quote }}
+            - name: AUTH_MODE
+              value: {{ .Values.api.authMode | quote }}
+            - name: OPERATION_MODE
+              value: {{ .Values.operationMode | quote }}
+            - name: REGISTRATION_ENABLED
+              value: {{ .Values.features.registrationEnabled | quote }}
+            - name: BILLING_ENABLED
+              value: {{ .Values.features.billingEnabled | quote }}
+            - name: KEYCLOAK_ISSUER_URL
+              value: {{ .Values.config.keycloakIssuerUrl | quote }}
+            - name: TENANT_CLAIM
+              value: {{ .Values.config.tenantClaim | quote }}
+            - name: DEFAULT_TENANT_ID
+              value: {{ .Values.config.defaultTenantId | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
+            - name: LEDGER_URL
+              value: http://{{ include "zeitvault.fullname" . }}-ledger:{{ .Values.ledger.port }}
+            # Geheimnisse aus extern verwaltetem Secret (OpenBao/External-Secrets).
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: DATABASE_URL
+            - name: KEYCLOAK_AUDIENCE
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: KEYCLOAK_AUDIENCE
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.api.probes.path }}
+              port: {{ .Values.api.port }}
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.api.probes.path }}
+              port: {{ .Values.api.port }}
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "zeitvault.fullname" . }}-api
+  labels:
+    {{- include "zeitvault.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/component: api
+  ports:
+    - port: {{ .Values.api.port }}
+      targetPort: {{ .Values.api.port }}
+      protocol: TCP

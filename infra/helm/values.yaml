@@ -1,0 +1,62 @@
+# ZeitVault Helm-Values. Produktion: Images per Digest pinnen (ADR-0003),
+# Secrets über OpenBao/External-Secrets (kein Klartext hier, ADR-0007).
+
+nameOverride: ''
+fullnameOverride: ''
+
+image:
+  registry: ghcr.io/dariatech-de
+  pullPolicy: IfNotPresent
+  # Leer = Chart.appVersion wird als Tag verwendet. In Produktion Digest setzen.
+  tag: ''
+
+# Betriebsmodell und SaaS-Flags (siehe apps/api Konfiguration, E2/ADR-0010).
+operationMode: self_hosted
+features:
+  registrationEnabled: false
+  billingEnabled: false
+
+api:
+  replicaCount: 2
+  port: 3000
+  authMode: oidc
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: '1', memory: 512Mi }
+  probes:
+    path: /api/health
+
+ledger:
+  replicaCount: 2
+  port: 3001
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 500m, memory: 256Mi }
+  probes:
+    path: /health
+
+# Nicht-geheime Konfiguration. Geheimnisse (DB-URL, OIDC-Secrets) kommen aus
+# einem extern verwalteten Secret (existingSecret), NICHT aus diesen Values.
+config:
+  keycloakIssuerUrl: ''
+  tenantClaim: tenant_id
+  defaultTenantId: default
+  otelExporterOtlpEndpoint: ''
+
+# Name eines bestehenden Kubernetes-Secrets (via OpenBao/External-Secrets befüllt)
+# mit Schlüsseln DATABASE_URL, LEDGER_DATABASE_URL, KEYCLOAK_AUDIENCE.
+existingSecret: zeitvault-secrets
+
+serviceAccount:
+  create: true
+  name: ''
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ['ALL']

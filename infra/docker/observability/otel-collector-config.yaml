@@ -1,0 +1,37 @@
+# OpenTelemetry-Collector (datensparsam): empfaengt OTLP von API/Ledger und
+# leitet Metriken an Prometheus sowie Logs an Loki weiter. Keine personenbezogenen
+# Attribute weiterreichen (Paragraf 12).
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch: {}
+  # Datensparsamkeit: potenziell personenbezogene Attribute entfernen.
+  attributes/scrub:
+    actions:
+      - key: enduser.id
+        action: delete
+      - key: user.email
+        action: delete
+
+exporters:
+  prometheus:
+    endpoint: 0.0.0.0:8889
+  otlphttp/loki:
+    endpoint: http://loki:3100/otlp
+
+service:
+  pipelines:
+    metrics:
+      receivers: [otlp]
+      processors: [batch, attributes/scrub]
+      exporters: [prometheus]
+    logs:
+      receivers: [otlp]
+      processors: [batch, attributes/scrub]
+      exporters: [otlphttp/loki]
