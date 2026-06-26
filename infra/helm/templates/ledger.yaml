@@ -30,6 +30,10 @@ spec:
           env:
             - name: PORT
               value: {{ .Values.ledger.port | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ .Values.config.otelExporterOtlpEndpoint | quote }}
+            - name: OTEL_SERVICE_NAME
+              value: zeitvault-ledger
             # Getrennte Ledger-Datenbank (ADR-0006) aus extern verwaltetem Secret.
             - name: DATABASE_URL
               valueFrom:

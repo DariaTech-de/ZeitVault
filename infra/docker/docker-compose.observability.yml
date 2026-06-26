@@ -7,6 +7,18 @@
 name: zeitvault-observability
 
 services:
+  # Erweitert die Hauptdienste (docker-compose.yml) um den OTLP-Export, sodass
+  # API und Ledger beim Start mit diesem Overlay Telemetrie an den Collector senden.
+  api:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: zeitvault-api
+  ledger:
+    environment:
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
+      OTEL_SERVICE_NAME: zeitvault-ledger
+
+
   otel-collector:
     image: otel/opentelemetry-collector-contrib:0.110.0
     command: ['--config=/etc/otelcol/config.yaml']

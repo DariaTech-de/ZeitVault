@@ -1,4 +1,6 @@
 import 'reflect-metadata';
+// Telemetrie zuerst initialisieren (vor allen instrumentierten Modulen).
+import './telemetry';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
