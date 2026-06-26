@@ -1,25 +1,14 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { getIdentity, setIdentity, type Identity } from '@/lib/identity';
+import { useAuth } from '@/lib/auth';
+import { AUTH_MODE } from '@/lib/identity';
 
 export function AppNav() {
-  const [identity, setIdentityState] = useState<Identity | null>(null);
-
-  useEffect(() => {
-    setIdentityState(getIdentity());
-  }, []);
-
-  const isAdmin = identity?.roles.includes('admin') ?? false;
-
-  function switchRole() {
-    if (!identity) return;
-    const roles = isAdmin ? ['employee'] : ['employee', 'admin'];
-    setIdentity({ ...identity, roles });
-    window.location.reload();
-  }
+  const { identity, displayName, logout, switchDevRole } = useAuth();
+  const roles = identity?.roles ?? [];
+  const isManager = roles.includes('manager') || roles.includes('admin');
 
   return (
     <nav className="border-b border-slate-200 bg-white">
@@ -37,12 +26,12 @@ export function AppNav() {
           <Link href="/konten" className="text-sm text-slate-600 hover:text-slate-900">
             Konten
           </Link>
-          {isAdmin && (
+          {isManager && (
             <Link href="/admin" className="text-sm text-slate-600 hover:text-slate-900">
               Verwaltung
             </Link>
           )}
-          {isAdmin && (
+          {isManager && (
             <Link
               href="/admin/auswertungen"
               className="text-sm text-slate-600 hover:text-slate-900"
@@ -52,17 +41,24 @@ export function AppNav() {
           )}
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-500">
+          {displayName && <span className="font-medium text-slate-700">{displayName}</span>}
           <span>
-            Rolle: <span className="font-medium text-slate-700">{isAdmin ? 'admin' : 'employee'}</span>
+            Rolle: <span className="font-medium text-slate-700">{roles.join(', ') || '-'}</span>
           </span>
-          <Button
-            variant="outline"
-            className="h-8 px-3 text-xs"
-            onClick={switchRole}
-            disabled={identity === null}
-          >
-            Rolle wechseln (Demo)
-          </Button>
+          {AUTH_MODE === 'dev' ? (
+            <Button
+              variant="outline"
+              className="h-8 px-3 text-xs"
+              onClick={switchDevRole}
+              disabled={identity === null}
+            >
+              Rolle wechseln (Demo)
+            </Button>
+          ) : (
+            <Button variant="outline" className="h-8 px-3 text-xs" onClick={logout}>
+              Abmelden
+            </Button>
+          )}
         </div>
       </div>
     </nav>

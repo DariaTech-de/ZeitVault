@@ -8,6 +8,7 @@ import { DbModule } from './db/db.module';
 import { EauModule } from './eau/eau.module';
 import { ExportModule } from './export/export.module';
 import { HealthModule } from './health/health.module';
+import { MeModule } from './me/me.module';
 import { PlatformModule } from './platform/platform.module';
 import { ProjectModule } from './project/project.module';
 import { ReportingModule } from './reporting/reporting.module';
@@ -38,6 +39,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     PlatformModule,
     ProjectModule,
     EauModule,
+    MeModule,
   ],
 })
 export class AppModule {}

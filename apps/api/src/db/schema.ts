@@ -36,6 +36,9 @@ export const employees = pgTable(
     tenantId: varchar('tenant_id', { length: 64 }).notNull(),
     personnelNumber: varchar('personnel_number', { length: 64 }).notNull(),
     displayName: varchar('display_name', { length: 200 }).notNull(),
+    // OIDC-Subject (sub) des verknüpften Nutzers; /me löst darüber den
+    // Mitarbeiter des angemeldeten Tokens auf.
+    externalId: varchar('external_id', { length: 128 }),
     // Lebenszyklus für die Retention-/Lösch-Engine (E3, Kern-Invariante 4).
     status: employeeStatus('status').notNull().default('active'),
     blockedAt: timestamp('blocked_at', { withTimezone: true }),

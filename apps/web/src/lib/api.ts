@@ -58,6 +58,22 @@ async function request<T>(identity: Identity, path: string, init?: RequestInit):
   return res.json() as Promise<T>;
 }
 
+export interface MeResponse {
+  tenantId: string;
+  userId: string;
+  roles: string[];
+  employee: { id: string; displayName: string; personnelNumber: string } | null;
+}
+
+/** Profil/Kontext des angemeldeten Nutzers (mit fertigen Auth-Headern). */
+export async function fetchMe(headers: Record<string, string>): Promise<MeResponse> {
+  const res = await fetch(`${API_BASE}/api/me`, { headers, cache: 'no-store' });
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}`);
+  }
+  return res.json() as Promise<MeResponse>;
+}
+
 export function fetchToday(identity: Identity): Promise<TodayResponse> {
   return request(identity, `/api/stamp/today?employeeId=${encodeURIComponent(identity.employeeId)}`);
 }

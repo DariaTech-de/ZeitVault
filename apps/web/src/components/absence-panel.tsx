@@ -13,7 +13,8 @@ import {
   decideAbsence,
   fetchAbsences,
 } from '@/lib/api';
-import { getIdentity, type Identity } from '@/lib/identity';
+import { useAuth } from '@/lib/auth';
+import type { Identity } from '@/lib/identity';
 
 const TYPE_LABEL: Record<AbsenceType, string> = {
   vacation: 'Urlaub',
@@ -36,7 +37,7 @@ function statusVariant(status: AbsenceStatus): 'default' | 'success' | 'warning'
 }
 
 export function AbsencePanel() {
-  const [identity, setIdentityState] = useState<Identity | null>(null);
+  const { identity } = useAuth();
   const [requests, setRequests] = useState<AbsenceRequest[]>([]);
   const [type, setType] = useState<AbsenceType>('vacation');
   const [from, setFrom] = useState('');
@@ -60,10 +61,8 @@ export function AbsencePanel() {
   }, []);
 
   useEffect(() => {
-    const id = getIdentity();
-    setIdentityState(id);
-    void refresh(id);
-  }, [refresh]);
+    if (identity) void refresh(identity);
+  }, [identity, refresh]);
 
   const onSubmit = useCallback(async () => {
     if (!identity || !from || !to) return;

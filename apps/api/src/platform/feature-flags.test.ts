@@ -15,6 +15,7 @@ function env(overrides: Partial<Env>): Env {
     REGISTRATION_ENABLED: false,
     BILLING_ENABLED: false,
     OTEL_SERVICE_NAME: 'zeitvault-api',
+    CORS_ORIGINS: [],
     ...overrides,
   } as Env;
 }

@@ -10,10 +10,11 @@ import {
   fetchBalanceList,
   fetchViolations,
 } from '@/lib/api';
-import { getIdentity, type Identity } from '@/lib/identity';
+import { useAuth } from '@/lib/auth';
+import type { Identity } from '@/lib/identity';
 
 export function ReportsPanel() {
-  const [identity, setIdentityState] = useState<Identity | null>(null);
+  const { identity } = useAuth();
   const [balances, setBalances] = useState<BalanceListEntry[]>([]);
   const [violations, setViolations] = useState<ViolationEntry[]>([]);
   const [from, setFrom] = useState('2026-06-01');
@@ -31,10 +32,8 @@ export function ReportsPanel() {
   }, []);
 
   useEffect(() => {
-    const id = getIdentity();
-    setIdentityState(id);
-    void loadBalances(id);
-  }, [loadBalances]);
+    if (identity) void loadBalances(identity);
+  }, [identity, loadBalances]);
 
   const loadViolations = useCallback(async () => {
     if (!identity) return;

@@ -8,10 +8,13 @@ import { loadEnv } from '../config/env';
 async function main(): Promise<void> {
   const env = loadEnv();
   const pool = new Pool({ connectionString: env.DATABASE_URL });
-  const employees: ReadonlyArray<[string, string]> = [
-    ['1001', 'Anna Beispiel'],
-    ['1002', 'Bernd Muster'],
-    ['1003', 'Clara Probe'],
+  // external_id verknüpft den Mitarbeiter mit dem OIDC-Subject (sub). Die festen
+  // subs entsprechen den Demo-Nutzern im Keycloak-Realm (demo/admin-demo); damit
+  // löst /me nach dem Login den richtigen Datensatz auf.
+  const employees: ReadonlyArray<[string, string, string | null]> = [
+    ['1001', 'Anna Beispiel', '11111111-1111-1111-1111-111111111111'],
+    ['1002', 'Bernd Muster', '22222222-2222-2222-2222-222222222222'],
+    ['1003', 'Clara Probe', null],
   ];
 
   try {
@@ -23,10 +26,13 @@ async function main(): Promise<void> {
     try {
       await client.query('BEGIN');
       await client.query("select set_config('app.tenant_id', 'default', true)");
-      for (const [personnelNumber, displayName] of employees) {
+      for (const [personnelNumber, displayName, externalId] of employees) {
         await client.query(
-          "insert into employees (tenant_id, personnel_number, display_name) values ('default', $1, $2) on conflict (tenant_id, personnel_number) do nothing",
-          [personnelNumber, displayName],
+          `insert into employees (tenant_id, personnel_number, display_name, external_id)
+           values ('default', $1, $2, $3)
+           on conflict (tenant_id, personnel_number)
+           do update set external_id = excluded.external_id`,
+          [personnelNumber, displayName, externalId],
         );
       }
       const { rows } = await client.query<{ id: string; personnel_number: string }>(

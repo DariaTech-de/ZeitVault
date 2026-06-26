@@ -12,7 +12,8 @@ import {
   fetchToday,
   stamp,
 } from '@/lib/api';
-import { getIdentity, type Identity } from '@/lib/identity';
+import { useAuth } from '@/lib/auth';
+import type { Identity } from '@/lib/identity';
 
 const STATE_LABEL: Record<StampState, string> = {
   out: 'Ausgestempelt',
@@ -27,7 +28,7 @@ function formatMinutes(total: number): string {
 }
 
 export function StampPanel() {
-  const [identity, setIdentityState] = useState<Identity | null>(null);
+  const { identity } = useAuth();
   const [status, setStatus] = useState<StampStatus | null>(null);
   const [findings, setFindings] = useState<Finding[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -45,10 +46,8 @@ export function StampPanel() {
   }, []);
 
   useEffect(() => {
-    const id = getIdentity();
-    setIdentityState(id);
-    void refresh(id);
-  }, [refresh]);
+    if (identity) void refresh(identity);
+  }, [identity, refresh]);
 
   const onStamp = useCallback(
     async (action: StampAction) => {

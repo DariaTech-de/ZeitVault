@@ -12,7 +12,8 @@ import {
   fetchStatement,
   postAccountTransaction,
 } from '@/lib/api';
-import { getIdentity, type Identity } from '@/lib/identity';
+import { useAuth } from '@/lib/auth';
+import type { Identity } from '@/lib/identity';
 
 const ACCOUNT_LABEL: Record<AccountKind, string> = {
   overtime: 'Überstunden',
@@ -31,7 +32,7 @@ function formatAmount(account: AccountKind, value: number): string {
 }
 
 export function AccountsPanel() {
-  const [identity, setIdentityState] = useState<Identity | null>(null);
+  const { identity } = useAuth();
   const [balances, setBalances] = useState<AccountBalance[]>([]);
   const [statement, setStatement] = useState<StatementLine[]>([]);
   const [account, setAccount] = useState<AccountKind>('overtime');
@@ -58,10 +59,8 @@ export function AccountsPanel() {
   }, []);
 
   useEffect(() => {
-    const id = getIdentity();
-    setIdentityState(id);
-    void refresh(id);
-  }, [refresh]);
+    if (identity) void refresh(identity);
+  }, [identity, refresh]);
 
   const onPost = useCallback(async () => {
     if (!identity || !amount || !effectiveDate) return;

@@ -32,6 +32,18 @@ export const envSchema = z.object({
   // kein Telemetrie-Export verdrahtet (datensparsam, Opt-in).
   OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
   OTEL_SERVICE_NAME: z.string().default('zeitvault-api'),
+  // Erlaubte CORS-Ursprünge (kommagetrennt) für die Web-/Mobile-App. Leer =
+  // Ursprung wird reflektiert (nur für lokale Entwicklung gedacht). In Produktion
+  // explizit pinnen.
+  CORS_ORIGINS: z
+    .string()
+    .default('')
+    .transform((value) =>
+      value
+        .split(',')
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0),
+    ),
 });
 
 export type Env = z.infer<typeof envSchema>;

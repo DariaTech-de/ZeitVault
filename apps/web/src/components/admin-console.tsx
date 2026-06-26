@@ -11,7 +11,7 @@ import {
   fetchEmployees,
   postCorrection,
 } from '@/lib/api';
-import { getIdentity, type Identity } from '@/lib/identity';
+import { useAuth } from '@/lib/auth';
 
 const KIND_LABEL: Record<string, string> = {
   clock_in: 'Kommen',
@@ -35,16 +35,15 @@ function formatMinutes(total: number): string {
 }
 
 export function AdminConsole() {
-  const [identity, setIdentityState] = useState<Identity | null>(null);
+  const { identity } = useAuth();
   const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState<DayListing | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    const id = getIdentity();
-    setIdentityState(id);
-    fetchEmployees(id)
+    if (!identity) return;
+    fetchEmployees(identity)
       .then((list) => {
         setEmployees(list);
         setError(null);
@@ -54,7 +53,7 @@ export function AdminConsole() {
           'Mitarbeitende konnten nicht geladen werden (Admin-Rolle nötig; API erreichbar?).',
         ),
       );
-  }, []);
+  }, [identity]);
 
   const loadDay = useCallback(
     async (employeeId: string) => {
