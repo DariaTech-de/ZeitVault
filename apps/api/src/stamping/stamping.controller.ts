@@ -1,10 +1,11 @@
 import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
-import { ApiTags } from '@nestjs/swagger';
-import { stampSchema } from '@zeitvault/types';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
+import { stampCorrectionSchema, stampSchema } from '@zeitvault/types';
 import { TenantGuard } from '../common/tenant.guard';
-import { StampResult, StampingService } from './stamping.service';
+import { DayListing, StampResult, StampingService } from './stamping.service';
 
 @ApiTags('Zeiterfassung')
+@ApiBearerAuth()
 @UseGuards(TenantGuard)
 @Controller('stamp')
 export class StampingController {
@@ -38,9 +39,22 @@ export class StampingController {
     return this.stamping.stamp({ ...input, kind: 'clock_out' });
   }
 
+  /** Korrektur einer Stempelung (neue Revision mit Begruendung, Kern-Invariante 1). */
+  @Post('corrections')
+  async correct(@Body() body: unknown): Promise<StampResult> {
+    const input = stampCorrectionSchema.parse(body);
+    return this.stamping.correctStamp(input);
+  }
+
   /** Tagesstatus und Live-ArbZG-Befunde. */
   @Get('today')
   async today(@Query('employeeId') employeeId: string) {
     return this.stamping.today(employeeId);
+  }
+
+  /** Roh-Ereignisse des Tages (inkl. Korrekturen) + Status/Befunde. */
+  @Get('events')
+  async events(@Query('employeeId') employeeId: string): Promise<DayListing> {
+    return this.stamping.listDay(employeeId);
   }
 }

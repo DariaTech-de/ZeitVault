@@ -1,6 +1,6 @@
 import { evaluateWorkDay, totalMinutes } from '../arbzg/engine';
 import type { Finding, RulePackage } from '../arbzg/types';
-import { foldStampDay, materializeStampDay } from './fold';
+import { foldStampDay, materializeStampDay, resolveEffectiveEvents } from './fold';
 import type { StampEvent, StampState } from './types';
 
 export interface StampStatus {
@@ -11,7 +11,7 @@ export interface StampStatus {
 
 /** Aktueller Status (Zustand + bisher gearbeitete/pausierte Minuten) "Stand jetzt". */
 export function computeStampStatus(events: readonly StampEvent[], now: Date): StampStatus {
-  const fold = foldStampDay(events);
+  const fold = foldStampDay(resolveEffectiveEvents(events));
   const { workIntervals, breakIntervals } = materializeStampDay(fold, now);
   return {
     state: fold.state,
@@ -30,7 +30,7 @@ export function evaluateStampDay(
   now: Date,
   options: { date: string; previousShiftEnd?: Date | null },
 ): Finding[] {
-  const fold = foldStampDay(events);
+  const fold = foldStampDay(resolveEffectiveEvents(events));
   const { workIntervals, breakIntervals } = materializeStampDay(fold, now);
   return evaluateWorkDay(
     {

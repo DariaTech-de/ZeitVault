@@ -11,6 +11,7 @@ export const auditActionSchema = z.enum([
   'time.break_start',
   'time.break_end',
   'time.clock_out',
+  'time.correct',
   'absence.request',
   'absence.approve',
   'export.run',

@@ -92,6 +92,9 @@ export const stampEvents = pgTable(
     kind: stampKind('kind').notNull(),
     occurredAt: timestamp('occurred_at', { withTimezone: true }).notNull(),
     source: timeEntrySource('source').notNull(),
+    // Korrektur: verweist auf das ueberschriebene Ereignis (append-only, B1).
+    correctsEventId: uuid('corrects_event_id'),
+    correctionReason: text('correction_reason'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [

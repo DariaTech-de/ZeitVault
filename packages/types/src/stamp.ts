@@ -18,3 +18,15 @@ export const stampSchema = z.object({
   occurredAt: isoTimestampSchema.optional(),
 });
 export type StampInput = z.infer<typeof stampSchema>;
+
+/**
+ * Korrektur einer Stempelung: erzeugt ein NEUES, ueberschreibendes Ereignis mit
+ * korrigiertem Zeitpunkt und Pflicht-Begruendung (Kern-Invariante 1; das
+ * Original bleibt erhalten).
+ */
+export const stampCorrectionSchema = z.object({
+  eventId: uuidSchema,
+  occurredAt: isoTimestampSchema,
+  correctionReason: z.string().min(3),
+});
+export type StampCorrectionInput = z.infer<typeof stampCorrectionSchema>;

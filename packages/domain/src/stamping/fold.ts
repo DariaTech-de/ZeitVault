@@ -10,6 +10,23 @@ export class StampTransitionError extends Error {
 }
 
 /**
+ * Reduziert Rohereignisse auf die *wirksamen* Ereignisse: ein Ereignis, das
+ * durch eine spaetere Korrektur (correctsId) ueberschrieben wurde, entfaellt;
+ * das Korrektur-Ereignis traegt die korrigierten Werte. Die Originale bleiben
+ * in der Datenbank erhalten (append-only/GoBD) - hier wird nur die gueltige
+ * Sicht berechnet.
+ */
+export function resolveEffectiveEvents(events: readonly StampEvent[]): StampEvent[] {
+  const correctedIds = new Set<string>();
+  for (const event of events) {
+    if (event.correctsId) {
+      correctedIds.add(event.correctsId);
+    }
+  }
+  return events.filter((event) => event.id === undefined || !correctedIds.has(event.id));
+}
+
+/**
  * Faltet eine Folge von Stempelungen (Rohereignisse) zu Arbeits- und
  * Pausenintervallen und ermittelt den Endzustand. Die Ereignisse selbst bleiben
  * unveraendert (append-only); diese Funktion ist rein und damit testbar. Bei

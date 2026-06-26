@@ -7,6 +7,10 @@ export type StampKind = 'clock_in' | 'break_start' | 'break_end' | 'clock_out';
 export interface StampEvent {
   kind: StampKind;
   at: Date;
+  /** Persistente ID des Ereignisses (optional fuer reine Berechnungen). */
+  id?: string;
+  /** Verweis auf das ueberschriebene Ereignis, falls dies eine Korrektur ist. */
+  correctsId?: string | null;
 }
 
 /** Erfassungsstatus eines Mitarbeitenden im Tagesverlauf. */
