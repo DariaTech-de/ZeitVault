@@ -7,6 +7,7 @@ import { TenantModule } from './common/tenant.module';
 import { DbModule } from './db/db.module';
 import { ExportModule } from './export/export.module';
 import { HealthModule } from './health/health.module';
+import { PlatformModule } from './platform/platform.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { RetentionModule } from './retention/retention.module';
 import { StampingModule } from './stamping/stamping.module';
@@ -32,6 +33,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     ReportingModule,
     ExportModule,
     RetentionModule,
+    PlatformModule,
   ],
 })
 export class AppModule {}

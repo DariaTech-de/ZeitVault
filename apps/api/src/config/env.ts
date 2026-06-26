@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+/** Boolesches Flag aus einer Umgebungsvariable ('true'/'false'); Default false. */
+const envBool = z
+  .enum(['true', 'false'])
+  .default('false')
+  .transform((value) => value === 'true');
+
 /** Validierte Umgebungskonfiguration. Faellt fail-fast bei ungueltigen Werten. */
 export const envSchema = z.object({
   NODE_ENV: z.enum(['development', 'test', 'production']).default('development'),
@@ -16,6 +22,16 @@ export const envSchema = z.object({
   KEYCLOAK_AUDIENCE: z.string().optional(),
   TENANT_CLAIM: z.string().default('tenant_id'),
   DEFAULT_TENANT_ID: z.string().default('default'),
+  // Betriebsmodell (eine Codebasis, zwei Modelle; ADR-0010): 'self_hosted' oder
+  // 'cloud'. SaaS-Funktionen (Registrierung/Abrechnung) sind nur im Cloud-Modus
+  // wirksam und standardmaessig deaktiviert (Datensparsamkeit, ADR-0010).
+  OPERATION_MODE: z.enum(['self_hosted', 'cloud']).default('self_hosted'),
+  REGISTRATION_ENABLED: envBool,
+  BILLING_ENABLED: envBool,
+  // Observability (OpenTelemetry): OTLP-Endpunkt des Collectors; ohne Wert wird
+  // kein Telemetrie-Export verdrahtet (datensparsam, Opt-in).
+  OTEL_EXPORTER_OTLP_ENDPOINT: z.string().url().optional(),
+  OTEL_SERVICE_NAME: z.string().default('zeitvault-api'),
 });
 
 export type Env = z.infer<typeof envSchema>;
