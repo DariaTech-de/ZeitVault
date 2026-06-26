@@ -17,3 +17,4 @@ export * from './surcharge/rule-packages';
 export * from './payroll/types';
 export * from './payroll/mapping';
 export * from './retention/retention';
+export * from './eau/eau';

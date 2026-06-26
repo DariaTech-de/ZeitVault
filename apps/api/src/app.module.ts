@@ -5,6 +5,7 @@ import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './audit/audit.module';
 import { TenantModule } from './common/tenant.module';
 import { DbModule } from './db/db.module';
+import { EauModule } from './eau/eau.module';
 import { ExportModule } from './export/export.module';
 import { HealthModule } from './health/health.module';
 import { PlatformModule } from './platform/platform.module';
@@ -36,6 +37,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     RetentionModule,
     PlatformModule,
     ProjectModule,
+    EauModule,
   ],
 })
 export class AppModule {}

@@ -11,3 +11,4 @@ export * from './surcharge';
 export * from './payroll';
 export * from './retention';
 export * from './project';
+export * from './eau';

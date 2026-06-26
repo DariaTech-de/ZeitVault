@@ -201,6 +201,34 @@ export const projectTimeEntries = pgTable(
 );
 export type ProjectTimeEntryRow = typeof projectTimeEntries.$inferSelect;
 
+export const eauStatus = pgEnum('eau_status', ['requested', 'submitted', 'confirmed', 'failed']);
+
+/**
+ * eAU-Abrufe (F1, Gerüst). Workflow-Entität mit Statuswechseln (veränderbar).
+ * Datensparsam: KEIN Diagnoseinhalt, nur Status/Referenz (Art. 9 DSGVO). Die
+ * Übertragung erfolgt über ein zertifiziertes externes Gateway (blockiert).
+ */
+export const eauRequests = pgTable(
+  'eau_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    fromDate: date('from_date').notNull(),
+    toDate: date('to_date').notNull(),
+    status: eauStatus('status').notNull().default('requested'),
+    externalRef: varchar('external_ref', { length: 128 }),
+    lastError: text('last_error'),
+    requestedAt: timestamp('requested_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('eau_requests_tenant_idx').on(t.tenantId),
+    index('eau_requests_employee_idx').on(t.employeeId),
+  ],
+);
+export type EauRequestRow = typeof eauRequests.$inferSelect;
+
 export const exportKind = pgEnum('export_kind', ['gobd_time', 'payroll_generic']);
 
 /**
