@@ -128,3 +128,36 @@ export function decideAbsence(
 ): Promise<AbsenceRequest> {
   return request(identity, `/api/absences/${id}/${action}`, { method: 'POST' });
 }
+
+export type AccountKind = 'overtime' | 'flextime' | 'vacation';
+
+export interface AccountBalance {
+  account: AccountKind;
+  balance: number;
+}
+
+export interface StatementLine {
+  account: AccountKind;
+  amount: number;
+  effectiveDate: string;
+  reason?: string;
+  runningBalance: number;
+}
+
+export function fetchBalances(identity: Identity, employeeId: string): Promise<AccountBalance[]> {
+  return request(identity, `/api/accounts/balances?employeeId=${encodeURIComponent(employeeId)}`);
+}
+
+export function fetchStatement(identity: Identity, employeeId: string): Promise<StatementLine[]> {
+  return request(identity, `/api/accounts/statement?employeeId=${encodeURIComponent(employeeId)}`);
+}
+
+export function postAccountTransaction(
+  identity: Identity,
+  input: { employeeId: string; account: AccountKind; amount: number; effectiveDate: string; reason?: string },
+): Promise<unknown> {
+  return request(identity, '/api/accounts/transactions', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}

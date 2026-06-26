@@ -147,6 +147,37 @@ export const absenceRequests = pgTable(
 export type AbsenceRequestRow = typeof absenceRequests.$inferSelect;
 export type NewAbsenceRequestRow = typeof absenceRequests.$inferInsert;
 
+export const accountKind = pgEnum('account_kind', ['overtime', 'flextime', 'vacation']);
+
+/**
+ * Buchungen der Arbeitszeitkonten (C2). Append-only/lohnrelevant: eine Korrektur
+ * erfolgt ueber eine vorzeichenbehaftete Gegenbuchung, UPDATE/DELETE werden per
+ * Trigger verhindert (Kern-Invariante 1; siehe migrations/0007_accounts.sql).
+ * Einheit je Kontoart: Minuten (overtime/flextime), Tage (vacation).
+ */
+export const accountTransactions = pgTable(
+  'account_transactions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    account: accountKind('account').notNull(),
+    amount: integer('amount').notNull(),
+    effectiveDate: date('effective_date').notNull(),
+    reason: text('reason'),
+    sourceType: varchar('source_type', { length: 64 }),
+    sourceId: varchar('source_id', { length: 128 }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('account_transactions_tenant_idx').on(t.tenantId),
+    index('account_transactions_employee_idx').on(t.employeeId, t.account, t.effectiveDate),
+  ],
+);
+
+export type AccountTransactionRow = typeof accountTransactions.$inferSelect;
+export type NewAccountTransactionRow = typeof accountTransactions.$inferInsert;
+
 /** Versionierte Arbeitszeitmodelle (Sollzeit je Wochentag in Minuten). */
 export const workTimeModels = pgTable(
   'work_time_models',

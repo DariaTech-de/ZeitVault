@@ -9,3 +9,5 @@ export * from './calendar/worktime';
 export * from './sync/queue';
 export * from './absence/transitions';
 export * from './absence/working-days';
+export * from './accounts/types';
+export * from './accounts/balance';

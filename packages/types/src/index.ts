@@ -6,3 +6,4 @@ export * from './sync';
 export * from './work-time';
 export * from './audit-event';
 export * from './absence';
+export * from './account';

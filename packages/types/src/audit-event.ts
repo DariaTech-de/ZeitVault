@@ -16,6 +16,7 @@ export const auditActionSchema = z.enum([
   'absence.approve',
   'absence.reject',
   'absence.cancel',
+  'account.post',
   'export.run',
   'permission.change',
 ]);

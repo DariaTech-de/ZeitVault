@@ -34,6 +34,9 @@ export function AppNav() {
           <Link href="/abwesenheit" className="text-sm text-slate-600 hover:text-slate-900">
             Abwesenheit
           </Link>
+          <Link href="/konten" className="text-sm text-slate-600 hover:text-slate-900">
+            Konten
+          </Link>
           {isAdmin && (
             <Link href="/admin" className="text-sm text-slate-600 hover:text-slate-900">
               Verwaltung
