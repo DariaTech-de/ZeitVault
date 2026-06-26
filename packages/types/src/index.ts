@@ -10,3 +10,4 @@ export * from './account';
 export * from './surcharge';
 export * from './payroll';
 export * from './retention';
+export * from './project';

@@ -1,4 +1,5 @@
 import {
+  boolean,
   date,
   index,
   integer,
@@ -156,6 +157,49 @@ export const absenceRequests = pgTable(
 
 export type AbsenceRequestRow = typeof absenceRequests.$inferSelect;
 export type NewAbsenceRequestRow = typeof absenceRequests.$inferInsert;
+
+/** Projekte (Stammdaten, veränderbar) für die Projektzeiterfassung (F2). */
+export const projects = pgTable(
+  'projects',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    code: varchar('code', { length: 32 }).notNull(),
+    name: varchar('name', { length: 200 }).notNull(),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('projects_tenant_idx').on(t.tenantId),
+    uniqueIndex('projects_tenant_code_uq').on(t.tenantId, t.code),
+  ],
+);
+export type ProjectRow = typeof projects.$inferSelect;
+
+/**
+ * Projektzeit-Buchungen (lohn-/abrechnungsrelevant, append-only). Korrektur über
+ * vorzeichenbehaftete Gegenbuchung; UPDATE/DELETE per Trigger verhindert
+ * (Kern-Invariante 1; siehe migrations/0011_projects.sql).
+ */
+export const projectTimeEntries = pgTable(
+  'project_time_entries',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    projectId: uuid('project_id').notNull(),
+    workDate: date('work_date').notNull(),
+    minutes: integer('minutes').notNull(),
+    note: text('note'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('project_time_tenant_idx').on(t.tenantId),
+    index('project_time_project_idx').on(t.projectId, t.workDate),
+    index('project_time_employee_idx').on(t.employeeId, t.workDate),
+  ],
+);
+export type ProjectTimeEntryRow = typeof projectTimeEntries.$inferSelect;
 
 export const exportKind = pgEnum('export_kind', ['gobd_time', 'payroll_generic']);
 

@@ -8,6 +8,7 @@ import { DbModule } from './db/db.module';
 import { ExportModule } from './export/export.module';
 import { HealthModule } from './health/health.module';
 import { PlatformModule } from './platform/platform.module';
+import { ProjectModule } from './project/project.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { RetentionModule } from './retention/retention.module';
 import { StampingModule } from './stamping/stamping.module';
@@ -34,6 +35,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     ExportModule,
     RetentionModule,
     PlatformModule,
+    ProjectModule,
   ],
 })
 export class AppModule {}

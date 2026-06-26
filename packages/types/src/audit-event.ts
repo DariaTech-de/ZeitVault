@@ -17,6 +17,7 @@ export const auditActionSchema = z.enum([
   'absence.reject',
   'absence.cancel',
   'account.post',
+  'project_time.book',
   'export.run',
   'retention.block',
   'retention.anonymize',
