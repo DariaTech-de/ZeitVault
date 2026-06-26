@@ -88,3 +88,43 @@ export function postCorrection(
     body: JSON.stringify({ eventId, occurredAt, correctionReason }),
   });
 }
+
+export type AbsenceType = 'vacation' | 'sick' | 'special';
+export type AbsenceStatus = 'requested' | 'approved' | 'rejected' | 'cancelled';
+export type AbsenceAction = 'approve' | 'reject' | 'cancel';
+
+export interface AbsenceRequest {
+  id: string;
+  employeeId: string;
+  type: AbsenceType;
+  fromDate: string;
+  toDate: string;
+  status: AbsenceStatus;
+  reason: string | null;
+  approverId: string | null;
+  decidedAt: string | null;
+  createdAt: string;
+}
+
+export function fetchAbsences(identity: Identity, employeeId?: string): Promise<AbsenceRequest[]> {
+  const query = employeeId ? `?employeeId=${encodeURIComponent(employeeId)}` : '';
+  return request(identity, `/api/absences${query}`);
+}
+
+export function createAbsence(
+  identity: Identity,
+  input: { type: AbsenceType; from: string; to: string; reason?: string },
+): Promise<AbsenceRequest> {
+  return request(identity, '/api/absences', {
+    method: 'POST',
+    body: JSON.stringify({ employeeId: identity.employeeId, ...input }),
+  });
+}
+
+export function decideAbsence(
+  identity: Identity,
+  id: string,
+  action: AbsenceAction,
+): Promise<AbsenceRequest> {
+  return request(identity, `/api/absences/${id}/${action}`, { method: 'POST' });
+}

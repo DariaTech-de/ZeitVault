@@ -109,6 +109,44 @@ export const stampEvents = pgTable(
 export type StampEventRow = typeof stampEvents.$inferSelect;
 export type NewStampEventRow = typeof stampEvents.$inferInsert;
 
+export const absenceType = pgEnum('absence_type', ['vacation', 'sick', 'special']);
+export const absenceStatus = pgEnum('absence_status', [
+  'requested',
+  'approved',
+  'rejected',
+  'cancelled',
+]);
+
+/**
+ * Abwesenheitsantraege (Urlaub/Krankheit/Sonderurlaub) mit Genehmigungs-Workflow
+ * (C1). Anders als TimeEntry/StampEvent ist dies eine Workflow-Entitaet mit
+ * Statuswechseln (requested -> approved/rejected/cancelled); jeder Schritt erzeugt
+ * ein AuditEvent (Kern-Invariante 2). Mandantentrennung via RLS (ADR-0004).
+ */
+export const absenceRequests = pgTable(
+  'absence_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    type: absenceType('type').notNull(),
+    fromDate: date('from_date').notNull(),
+    toDate: date('to_date').notNull(),
+    status: absenceStatus('status').notNull().default('requested'),
+    reason: text('reason'),
+    approverId: varchar('approver_id', { length: 128 }),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('absence_requests_tenant_idx').on(t.tenantId),
+    index('absence_requests_employee_idx').on(t.employeeId),
+  ],
+);
+
+export type AbsenceRequestRow = typeof absenceRequests.$inferSelect;
+export type NewAbsenceRequestRow = typeof absenceRequests.$inferInsert;
+
 /** Versionierte Arbeitszeitmodelle (Sollzeit je Wochentag in Minuten). */
 export const workTimeModels = pgTable(
   'work_time_models',

@@ -2,12 +2,14 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { AppModule } from './app.module';
+import { ZodExceptionFilter } from './common/zod-exception.filter';
 import { loadEnv } from './config/env';
 
 async function bootstrap(): Promise<void> {
   const env = loadEnv();
   const app = await NestFactory.create(AppModule);
   app.setGlobalPrefix('api');
+  app.useGlobalFilters(new ZodExceptionFilter());
 
   const config = new DocumentBuilder()
     .setTitle('ZeitVault API')

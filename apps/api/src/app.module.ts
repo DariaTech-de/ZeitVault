@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AbsenceModule } from './absence/absence.module';
 import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './audit/audit.module';
 import { TenantModule } from './common/tenant.module';
@@ -22,6 +23,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     StampingModule,
     AdminModule,
     WorkTimeModule,
+    AbsenceModule,
   ],
 })
 export class AppModule {}
