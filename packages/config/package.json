@@ -1,0 +1,13 @@
+{
+  "name": "@zeitvault/config",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Geteilte Konventionen: TS-Config-Presets, ESLint- und Prettier-Basiskonfiguration",
+  "type": "module",
+  "files": [
+    "tsconfig.library.json",
+    "tsconfig.nestjs.json",
+    "eslint.base.mjs",
+    "prettier.base.mjs"
+  ]
+}

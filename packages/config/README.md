@@ -6,6 +6,6 @@
 
 **Architektur-Hinweis:** TypeScript-zentriertes Monorepo (Turborepo + pnpm) ist eine gesetzte Entscheidung; geteilte Konfiguration hält Builds reproduzierbar und Qualität einheitlich.
 
-**Status:** Platzhalter – Implementierung folgt in Phase 0 gemäß Paragraf 18.
+**Status:** Phase-0-Gerüst vorhanden: TS-Config-Presets (`tsconfig.library.json`, `tsconfig.nestjs.json`), ESLint-Flat-Config-Basis (`eslint.base.mjs`) und Prettier-Basis (`prettier.base.mjs`). Eingebunden über die Root-Dateien `eslint.config.mjs` / `prettier.config.mjs` und die `tsconfig`-Extends der Pakete.
 
 **Architektur:** siehe [Paragraf 17 – Repository-Struktur](../../docs/ARCHITEKTUR.md#17-repository-struktur-für-claude-code) und [ADR-0002 (TypeScript-Monorepo und Stack)](../../docs/adr/0002-typescript-monorepo-und-stack.md).

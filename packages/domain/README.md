@@ -6,7 +6,7 @@
 
 **Architektur-Hinweis:** Dieses Paket entkoppelt die stabile Domänenlogik von schnelldrehenden Frameworks (Web/Mobile). Regeln liegen als versionierte Regelpakete mit Gültigkeitszeitraum vor.
 
-**Status:** Platzhalter – Implementierung folgt in Phase 0/1 gemäß Paragraf 18.
+**Status:** Phase-0-Gerüst vorhanden und verifiziert (19 Tests grün): ArbZG-Regel-Engine in `src/arbzg` – tägliche Höchstarbeitszeit (8 h/10 h), Ruhezeit (≥ 11 h) und Pflichtpausen (30/45 min) als deklarative Bewertung, versioniertes Regelpaket `ARBZG_2026_V1` und `selectRulePackage` (datierte Gültigkeit). Feiertagskalender und Zuschläge folgen (Phase 2).
 
 **Architektur:** siehe [Paragraf 10 – Regel-/Compliance-Engine](../../docs/ARCHITEKTUR.md#10-regel-compliance-engine) und [ADR-0009 (Regel-Engine)](../../docs/adr/0009-compliance-regel-engine.md).
 

@@ -1,0 +1,19 @@
+# ZeitVault API - Mehrstufiger Build. Build-Kontext ist das Repo-Root (../..).
+# Basis-Image in Produktion per Digest pinnen (ADR-0003).
+FROM node:24-bookworm-slim AS build
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm --filter @zeitvault/api... build
+
+FROM node:24-bookworm-slim AS runtime
+ENV NODE_ENV=production
+WORKDIR /repo
+# Hinweis: Fuer ein schlankeres Image kann in Produktion `pnpm deploy --prod`
+# genutzt werden, um nur die Produktionsabhaengigkeiten zu uebernehmen.
+COPY --from=build /repo /repo
+WORKDIR /repo/apps/api
+EXPOSE 3000
+USER node
+CMD ["node", "dist/main.js"]

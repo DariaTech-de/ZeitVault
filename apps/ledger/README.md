@@ -6,6 +6,6 @@
 
 **Harte MUSS-Invarianten:** append-only (kein Update/Delete), Hash-Verkettung über `prev_hash` (manipulationsevidente Kette), periodische signierte Versiegelung in WORM-S3, getrennte Schreibrechte (Anwendungs-DB-User darf nur einfügen). Jeder Eintrag führt `tenant_id`; RLS bleibt aktiv.
 
-**Status:** Platzhalter – Implementierung folgt in Phase 0 gemäß Paragraf 18.
+**Status:** Phase-0-Gerüst vorhanden und verifiziert (9 Tests grün): append-only Drizzle-Schema + Migration [`src/db/migrations/0000_init.sql`](src/db/migrations/0000_init.sql) mit Append-only-Trigger und RLS, SHA-256-Hash-Verkettung (`src/ledger/hash.ts`) und Ketten-Verifikation (`src/ledger/chain.ts`, `GET /audit/verify`), Append-Endpunkt `POST /audit/events`. Periodische signierte WORM-Versiegelung und der optionale qualifizierte Zeitstempel folgen.
 
 **Architektur:** siehe [Paragraf 9 – Revisionssicherheit & Audit](../../docs/ARCHITEKTUR.md#9-revisionssicherheit--audit-gobd-kern) und [ADR-0006 (Audit-Ledger)](../../docs/adr/0006-audit-ledger-append-only.md).

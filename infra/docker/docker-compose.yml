@@ -1,0 +1,104 @@
+# ZeitVault - Self-Hosted "klein" (Docker Compose), ARCHITEKTUR.md Paragraf 16.
+# Identische Images wie im Cloud-Betrieb; Unterschiede nur ueber Konfiguration
+# (ADR-0010). Image-Tags sind Beispiele - in Produktion per Digest pinnen (ADR-0003).
+name: zeitvault
+
+services:
+  postgres:
+    image: postgres:18
+    environment:
+      POSTGRES_USER: zeitvault
+      POSTGRES_PASSWORD: zeitvault
+      POSTGRES_DB: zeitvault
+    ports:
+      - '5432:5432'
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Legt zusaetzlich die getrennte Ledger-Datenbank an (ADR-0006).
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U zeitvault']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  valkey:
+    # Valkey statt Redis (lizenzsicher, ADR-0007). Ziel 9.x (Paragraf 5).
+    image: valkey/valkey:8-alpine
+    command: ['valkey-server', '--save', '60', '1']
+    ports:
+      - '6379:6379'
+    volumes:
+      - valkeydata:/data
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  keycloak:
+    # OIDC/SAML Identity-Provider (ADR-0008). Dev-Modus nur fuer lokale Entwicklung.
+    image: quay.io/keycloak/keycloak:26.0
+    command: ['start-dev']
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - '8080:8080'
+
+  openbao:
+    # Secrets-Verwaltung (ADR-0007). Dev-Modus nur fuer lokale Entwicklung.
+    image: openbao/openbao:latest
+    environment:
+      BAO_DEV_ROOT_TOKEN_ID: dev-root
+      BAO_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    ports:
+      - '8200:8200'
+    cap_add:
+      - IPC_LOCK
+
+  seaweedfs:
+    # S3-kompatibler Objektspeicher fuer Exporte/WORM-Ablage (Paragraf 5/16).
+    image: chrislusf/seaweedfs:latest
+    command: ['server', '-s3', '-dir=/data']
+    ports:
+      - '8333:8333'
+    volumes:
+      - seaweeddata:/data
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: postgres://zeitvault:zeitvault@postgres:5432/zeitvault
+      LEDGER_URL: http://ledger:3001
+      KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/zeitvault
+    ports:
+      - '3000:3000'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      valkey:
+        condition: service_healthy
+
+  ledger:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.ledger
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      DATABASE_URL: postgres://zeitvault:zeitvault@postgres:5432/zeitvault_ledger
+    ports:
+      - '3001:3001'
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
+  valkeydata:
+  seaweeddata:

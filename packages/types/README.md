@@ -6,6 +6,6 @@
 
 **Architektur-Hinweis:** Maximale Code-/Typ-Teilung in einem TypeScript-Monorepo ist eine gesetzte Stack-Entscheidung. DTOs spiegeln die Kern-Entitäten (u. a. `TimeEntry` mit `revision`/`previous_entry_id`, `AuditEvent`, `tenant_id`).
 
-**Status:** Platzhalter – Implementierung folgt in Phase 0/1 gemäß Paragraf 18.
+**Status:** Phase-0-Gerüst vorhanden (build/typecheck grün): Zod-Schemata und Typen in `src` für `common` (UUID, ISO-Zeitstempel, Bundesland), `tenant` (`TenantContext`, `DEFAULT_TENANT_ID`), `time-entry` (inkl. `correctTimeEntrySchema`), `audit-event` und `absence`. Weitere DTOs folgen mit den jeweiligen Modulen.
 
 **Architektur:** siehe [Paragraf 5 – Technologie-Stack](../../docs/ARCHITEKTUR.md#5-technologie-stack) und [ADR-0002 (TypeScript-Monorepo und Stack)](../../docs/adr/0002-typescript-monorepo-und-stack.md).

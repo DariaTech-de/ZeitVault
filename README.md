@@ -100,9 +100,37 @@ zeitvault/
 
 ## Projektstatus
 
-**Stand 2026-06-26:** Aktuell liegt das **Architektur- und Dokumentationsfundament** vor (`docs/ARCHITEKTUR.md`, ADRs, Compliance- und Beitragsrichtlinien). Das **Phase-0-Code-Geruest** (Monorepo-Setup, Apps/Packages, CI/CD, Auth, Datenmodell, Audit-Ledger, Compose-Setup) ist **noch nicht implementiert**.
+**Stand 2026-06-26:** Architektur-/Dokumentationsfundament **und** Phase-0-Backend-Geruest vorhanden:
 
-Das in diesem README beschriebene Monorepo-Layout und der Technologie-Stack sind verbindlich festgelegt und bilden die Vorgabe fuer die anschliessende Umsetzung. Aktiver Entwicklungs-Branch: `claude/zeitvault-architecture-ppqs2u`; `main` ist geschuetzt.
+- **Vorhanden (verifiziert: `pnpm lint`, `typecheck`, `test`, `build` gruen):**
+  - Monorepo-Spine (Turborepo + pnpm, geteilte TS-/ESLint-/Prettier-Konfiguration).
+  - `packages/types` (DTOs/Zod-Schemata), `packages/domain` (versionierte ArbZG-Regel-Engine **mit Tests**).
+  - `apps/api` (NestJS 11): RLS-Tenant-Kontext (`SET LOCAL`), Drizzle-Schema + Migration mit RLS-Policies und GoBD-Unveraenderbarkeits-Trigger, unveraenderliche `TimeEntry`-Korrektur (neue Revision), Audit-Anbindung, Health/OpenAPI.
+  - `apps/ledger` (NestJS 11): append-only, hash-verketteter Audit-Trail mit Ketten-Verifikation (**mit Tests**).
+  - `infra/docker` (Compose-Stack inkl. Postgres 18, Valkey, Keycloak, OpenBao, SeaweedFS) und GitHub-Actions-CI (Lint/Typecheck/Test/Build, CodeQL, Dependency-Review, SBOM).
+- **Noch offen:** `apps/web` (Next.js) und `apps/mobile` (Expo) sind **Phase 1**; Keycloak-Token-Verifikation, DATEV-Export und eAU folgen in spaeteren Phasen (siehe Roadmap).
+
+Aktiver Entwicklungs-Branch: `claude/zeitvault-architecture-ppqs2u`; `main` ist geschuetzt.
+
+> Hinweis: Ziellaufzeit ist Node.js **24 LTS**. Lokale Builds laufen auch auf aelteren LTS-Linien (kein harter Engine-Abbruch).
+
+---
+
+## Erste Schritte
+
+```bash
+corepack enable           # pnpm 10 aktivieren
+pnpm install              # Abhaengigkeiten installieren
+pnpm lint                 # ESLint
+pnpm typecheck            # TypeScript
+pnpm test                 # Vitest (Regel-Engine, Korrektur-Logik, Hash-Kette)
+pnpm build                # alle Pakete bauen
+
+# Lokaler Stack (Postgres, Valkey, Keycloak, OpenBao, SeaweedFS, api, ledger):
+docker compose -f infra/docker/docker-compose.yml up -d --build
+pnpm --filter @zeitvault/api    db:migrate
+pnpm --filter @zeitvault/ledger db:migrate
+```
 
 ---
 
