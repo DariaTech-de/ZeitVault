@@ -12,6 +12,12 @@ jobs:
       - uses: actions/checkout@v4
       - name: Dependency Review
         uses: actions/dependency-review-action@v4
+        # Voraussetzung: aktivierter Dependency Graph (+ GitHub Advanced Security)
+        # in den Repository-Einstellungen (Settings -> Code security). Solange das
+        # nicht aktiviert ist, kann die Action nicht laufen und darf den PR NICHT
+        # blockieren -> continue-on-error. Nach Aktivierung diesen Schalter
+        # entfernen, um die Lizenz-/Schwachstellenpruefung verbindlich zu machen
+        # (ADR-0003/0007).
+        continue-on-error: true
         with:
-          # Lizenz- und Schwachstellenpruefung neuer Abhaengigkeiten (ADR-0003/0007).
           fail-on-severity: high
