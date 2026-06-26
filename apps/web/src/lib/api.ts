@@ -161,3 +161,31 @@ export function postAccountTransaction(
     body: JSON.stringify(input),
   });
 }
+
+export interface ViolationEntry {
+  employeeId: string;
+  displayName: string;
+  date: string;
+  findings: Finding[];
+}
+
+export interface BalanceListEntry {
+  employeeId: string;
+  displayName: string;
+  balances: AccountBalance[];
+}
+
+export function fetchViolations(
+  identity: Identity,
+  from: string,
+  to: string,
+): Promise<ViolationEntry[]> {
+  return request(
+    identity,
+    `/api/reports/violations?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+  );
+}
+
+export function fetchBalanceList(identity: Identity): Promise<BalanceListEntry[]> {
+  return request(identity, '/api/reports/balances');
+}

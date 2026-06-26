@@ -42,6 +42,14 @@ export function AppNav() {
               Verwaltung
             </Link>
           )}
+          {isAdmin && (
+            <Link
+              href="/admin/auswertungen"
+              className="text-sm text-slate-600 hover:text-slate-900"
+            >
+              Auswertungen
+            </Link>
+          )}
         </div>
         <div className="flex items-center gap-3 text-xs text-slate-500">
           <span>
