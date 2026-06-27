@@ -78,11 +78,13 @@ services:
       PORT: '3000'
       DATABASE_URL: postgres://zeitvault:zeitvault@postgres:5432/zeitvault
       LEDGER_URL: http://ledger:3001
-      # Lokales Demo-Setup: Header-basierter Kontext, damit der Stack ohne
-      # konfigurierten Keycloak-Realm laeuft. PRODUKTION: AUTH_MODE=oidc setzen
-      # und Realm/Issuer konfigurieren (ADR-0008).
-      AUTH_MODE: dev
+      # Standard: Header-Kontext (Demo). Fuer den echten OIDC-Login per Host-Env
+      # ueberschreiben: `AUTH_MODE=oidc CORS_ORIGINS=http://localhost:3002 docker compose up`
+      # (Realm/Issuer sind bereits konfiguriert, ADR-0008).
+      AUTH_MODE: ${AUTH_MODE:-dev}
       KEYCLOAK_ISSUER_URL: http://keycloak:8080/realms/zeitvault
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-account}
+      CORS_ORIGINS: ${CORS_ORIGINS:-}
     ports:
       - '3000:3000'
     depends_on:
