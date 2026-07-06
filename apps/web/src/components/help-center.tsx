@@ -23,15 +23,16 @@ const TOPICS: Topic[] = [
     title: 'Anmeldung, Rollen und Rechte',
     roles: ['employee', 'manager', 'admin'],
     intro:
-      'Die Anmeldung erfolgt über den zentralen Identitätsanbieter (OIDC). Nach dem Login werden Sie automatisch dem richtigen Mitarbeiterdatensatz und Mandanten zugeordnet. Für Administratoren ist Mehrfaktor-Authentifizierung (MFA) Pflicht.',
+      'Die Anmeldung erfolgt über den zentralen Identitätsanbieter (OIDC). Nach dem Login werden Sie automatisch dem richtigen Mitarbeiterdatensatz und Mandanten zugeordnet. Für Administratoren ist Mehrfaktor-Authentifizierung (MFA) Pflicht. Zusätzlich ist die passwortlose Anmeldung per Passkey (WebAuthn) möglich.',
     steps: [
       'employee: eigene Zeit stempeln, eigene Anträge stellen, eigene Salden sehen.',
       'manager: zusätzlich Anträge freigeben/ablehnen, Kontenbuchungen, Bereichs-Auswertungen, Exporte.',
       'admin: zusätzlich Stammdaten und Arbeitszeitmodelle, Rechte, Aufbewahrung/Anonymisierung, Systemübersicht.',
+      'Passkey registrieren: in der Konto-Konsole (/realms/zeitvault/account, Bereich „Anmeldung") einen Passkey hinzufügen; danach genügt Benutzername + Passkey statt Passwort.',
     ],
     note: {
       tone: 'info',
-      text: 'Die Navigation ist rollenabhängig: „Verwaltung" und „Auswertungen" sind nur für Vorgesetzte/Admins sichtbar.',
+      text: 'Die Navigation ist rollenabhängig: „Verwaltung" und „Auswertungen" sind nur für Vorgesetzte/Admins sichtbar. Passkeys sind phishing-resistent; biometrische Merkmale bleiben auf dem Gerät.',
     },
   },
   {

@@ -63,6 +63,26 @@ Nach erfolgreicher Anmeldung wird der angemeldete Nutzer automatisch dem
 richtigen Mitarbeiterdatensatz und Mandanten zugeordnet. Für Administratoren ist
 **Mehrfaktor-Authentifizierung (MFA) Pflicht**.
 
+### 2.1.1 Anmeldung per Passkey (passwortlos)
+
+Zusätzlich zum Passwort ist die Anmeldung per **Passkey** (WebAuthn/FIDO2)
+möglich. Ein Passkey ist ein gerätegebundenes Schlüsselpaar (z. B. Windows
+Hello, Touch ID/Face ID, Android oder ein Sicherheitsschlüssel); der private
+Schlüssel verlässt das Gerät nie und ist phishing-resistent. Biometrische
+Merkmale bleiben ausschließlich lokal auf dem Gerät – der Server speichert nur
+den öffentlichen Schlüssel (Datensparsamkeit).
+
+**Passkey registrieren:** In der Konto-Konsole des Identitätsanbieters
+(`/realms/zeitvault/account`, Bereich „Anmeldung") den Punkt „Passkey"/„Sicherheitsschlüssel"
+hinzufügen und der Aufforderung des Geräts folgen.
+
+**Mit Passkey anmelden:** Auf der Anmeldeseite den Benutzernamen eingeben und
+statt des Passworts den Passkey wählen. Die Passwort-Anmeldung bleibt als
+Alternative erhalten (Wiederherstellung bei Geräteverlust). In Produktion muss
+die Anmeldeseite über HTTPS erreichbar sein (Voraussetzung von WebAuthn).
+
+> Details: [`adr/0012-passkey-webauthn-login.md`](adr/0012-passkey-webauthn-login.md).
+
 > Details zur Auth-Strecke: [`adr/0008-auth-keycloak-oidc-saml.md`](adr/0008-auth-keycloak-oidc-saml.md).
 
 ### 2.2 Rollenmodell (RBAC)

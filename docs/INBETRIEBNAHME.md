@@ -21,6 +21,15 @@ docker compose -f docker-compose.yml -f docker-compose.observability.yml up -d
 
 Der Keycloak-Realm `zeitvault` wird automatisch importiert (Clients `zeitvault-web`/`zeitvault-mobile`, Demo-Nutzer `demo`/`demo` und `admin-demo`/`admin`).
 
+Der Import aktiviert zusätzlich den **Passkey-/WebAuthn-Login** (passwortlos): den Browser-Flow `ZeitVault Browser mit Passkey`, die WebAuthn-Passwordless-Policy und die Required Action `webauthn-register-passwordless` (Opt-in). Nach dem Start prüfen:
+
+```bash
+# Realm importiert und Passkey-Flow gebunden?
+curl -s http://localhost:8080/realms/zeitvault/.well-known/openid-configuration | grep -o '"issuer":"[^"]*"'
+```
+
+Passkey-Test (in Produktion HTTPS erforderlich, lokal ist `localhost` ausgenommen): einen Passkey über die Konto-Konsole `http://localhost:8080/realms/zeitvault/account` (Bereich „Anmeldung") registrieren und anschließend per Passkey anmelden. In der Admin-Konsole unter *Authentication → Flows* ist der gebundene Browser-Flow `ZeitVault Browser mit Passkey` sichtbar. Siehe [`adr/0012-passkey-webauthn-login.md`](adr/0012-passkey-webauthn-login.md).
+
 ## 3. Datenbank migrieren und seeden
 
 ```bash
@@ -90,6 +99,7 @@ Collector. Grafana unter `http://localhost:3300` (admin/admin), Prometheus unter
 - [ ] `docker compose up` bringt alle Dienste hoch (Health grün)
 - [ ] `AUTH=oidc bash scripts/verify-stack.sh` → 0 Fehler
 - [ ] Web-Login über Keycloak erfolgreich; rollenabhängige Navigation
+- [ ] Passkey registrierbar (Konto-Konsole) und passwortlose Anmeldung erfolgreich
 - [ ] Mobile-App auf Emulator: Login, Stempeln, Offline-Sync
 - [ ] Observability: Traces in Grafana sichtbar
 
