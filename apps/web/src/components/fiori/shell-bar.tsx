@@ -46,6 +46,7 @@ export function ShellBar() {
     { href: '/konten', label: 'Konten', show: true },
     { href: '/admin', label: 'Verwaltung', show: isManager },
     { href: '/admin/auswertungen', label: 'Auswertungen', show: isManager },
+    { href: '/hilfe', label: 'Hilfe', show: true },
   ];
 
   return (
