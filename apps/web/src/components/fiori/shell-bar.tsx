@@ -46,8 +46,16 @@ export function ShellBar() {
     { href: '/konten', label: 'Konten', show: true },
     { href: '/admin', label: 'Verwaltung', show: isManager },
     { href: '/admin/auswertungen', label: 'Auswertungen', show: isManager },
+    { href: '/admin/lizenz', label: 'Lizenz', show: isManager },
     { href: '/hilfe', label: 'Hilfe', show: true },
   ];
+
+  // Aktiv ist der Eintrag mit dem laengsten passenden Pfad-Praefix, damit unter
+  // /admin/... nicht zusaetzlich „Verwaltung" (/admin) markiert wird.
+  const activeHref = nav
+    .filter((n) => n.show)
+    .filter((n) => (n.href === '/' ? pathname === '/' : pathname === n.href || pathname.startsWith(`${n.href}/`)))
+    .reduce<string | null>((best, n) => (best && best.length >= n.href.length ? best : n.href), null);
 
   return (
     <header className="sticky top-0 z-40 flex h-14 items-center gap-4 border-b border-line bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] px-5 backdrop-blur-md">
@@ -66,7 +74,7 @@ export function ShellBar() {
         {nav
           .filter((n) => n.show)
           .map((n) => {
-            const active = n.href === '/' ? pathname === '/' : pathname.startsWith(n.href);
+            const active = n.href === activeHref;
             return (
               <Link
                 key={n.href}

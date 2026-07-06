@@ -26,6 +26,8 @@ export const auditActionSchema = z.enum([
   'retention.anonymize',
   'retention.purge',
   'permission.change',
+  'employee.create',
+  'license.activate',
 ]);
 export type AuditAction = z.infer<typeof auditActionSchema>;
 

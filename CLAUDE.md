@@ -139,6 +139,7 @@ Nicht-triviale Entscheidungen werden als ADR dokumentiert (relative Links in Cro
 - [`docs/adr/0010-eine-codebasis-zwei-betriebsmodelle.md`](docs/adr/0010-eine-codebasis-zwei-betriebsmodelle.md) – Eine Codebasis, zwei Betriebsmodelle
 - [`docs/adr/0011-datev-mapping-geruest-generischer-export.md`](docs/adr/0011-datev-mapping-geruest-generischer-export.md) – DATEV-Mapping-Gerüst mit generischem Export
 - [`docs/adr/0012-passkey-webauthn-login.md`](docs/adr/0012-passkey-webauthn-login.md) – Passkey-/WebAuthn-Login (passwortlos) über Keycloak
+- [`docs/adr/0013-lizenzierung-pro-mitarbeiter.md`](docs/adr/0013-lizenzierung-pro-mitarbeiter.md) – Lizenzierung pro Mitarbeiter (signierte Sitzplätze, offline)
 
 Einheitliches ADR-Format (Überschriften exakt):
 

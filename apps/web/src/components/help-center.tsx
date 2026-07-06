@@ -130,6 +130,22 @@ const TOPICS: Topic[] = [
     },
   },
   {
+    id: 'lizenz',
+    title: 'Lizenzierung und Sitzplätze',
+    roles: ['manager', 'admin'],
+    intro:
+      'ZeitVault wird pro Mitarbeitenden (Sitzplatz) als Paket lizenziert (z. B. 5/10/15). Der Bereich „Lizenz" zeigt Paket, belegte/verfügbare Sitzplätze und Gültigkeit. Belegt sind die aktiven Mitarbeitenden; gesperrte/pseudonymisierte zählen nicht.',
+    steps: [
+      'Lizenz aktivieren (Admin): das vom Hersteller ausgestellte, signierte Token einfügen und aktivieren – Signatur, Mandant und Laufzeit werden offline geprüft.',
+      'Mitarbeitende/n anlegen: belegt einen Sitzplatz; bei erschöpftem Kontingent wird die Anlage abgelehnt.',
+      'Für mehr Sitzplätze eine größere Lizenz aktivieren.',
+    ],
+    note: {
+      tone: 'info',
+      text: 'Die Prüfung erfolgt offline (kein Phone-Home). Ohne gültige Lizenz gilt ein kleines Testmodus-Kontingent. Jede Aktivierung wird revisionssicher protokolliert.',
+    },
+  },
+  {
     id: 'sicherheit',
     title: 'Sicherheit',
     roles: ['manager', 'admin'],

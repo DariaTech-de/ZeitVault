@@ -44,6 +44,17 @@ export const envSchema = z.object({
         .map((origin) => origin.trim())
         .filter((origin) => origin.length > 0),
     ),
+  // Lizenzierung (ADR-0013): oeffentlicher Ed25519-Schluessel (PEM) zur Pruefung
+  // signierter Lizenz-Token. Der private Schluessel liegt beim Hersteller und
+  // nie im Repo. Ohne konfigurierten Schluessel bleibt der Mandant im Testmodus.
+  // Zeilenumbrueche duerfen als "\n" uebergeben werden.
+  LICENSE_PUBLIC_KEY: z
+    .string()
+    .default('')
+    .transform((value) => value.replace(/\\n/g, '\n').trim()),
+  // Sitzplatz-Kontingent ohne gueltige Lizenz (Testmodus), damit Ersteinrichtung
+  // und Demo moeglich bleiben. In Produktion durch eine echte Lizenz ersetzt.
+  LICENSE_GRACE_SEATS: z.coerce.number().int().min(0).max(100000).default(5),
 });
 
 export type Env = z.infer<typeof envSchema>;

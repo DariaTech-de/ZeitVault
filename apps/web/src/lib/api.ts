@@ -217,6 +217,39 @@ export function decideCorrection(
   return request(identity, `/api/corrections/${id}/${action}`, { method: 'POST' });
 }
 
+export interface LicenseStatus {
+  licensed: boolean;
+  valid: boolean;
+  tier: string;
+  customer: string | null;
+  seats: number;
+  seatsUsed: number;
+  seatsRemaining: number;
+  validUntil: string | null;
+  reason: string;
+}
+
+export function fetchLicenseStatus(identity: Identity): Promise<LicenseStatus> {
+  return request(identity, '/api/license');
+}
+
+export function activateLicense(identity: Identity, token: string): Promise<LicenseStatus> {
+  return request(identity, '/api/license', {
+    method: 'POST',
+    body: JSON.stringify({ token }),
+  });
+}
+
+export function createEmployee(
+  identity: Identity,
+  input: { personnelNumber: string; displayName: string; externalId?: string },
+): Promise<EmployeeSummary> {
+  return request(identity, '/api/admin/employees', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+}
+
 export interface ViolationEntry {
   employeeId: string;
   displayName: string;

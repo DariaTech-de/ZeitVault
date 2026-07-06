@@ -343,6 +343,28 @@ Funktionen lassen sich über die System-/Info-Ansicht einsehen.
 
 > Hintergrund: [`adr/0010-eine-codebasis-zwei-betriebsmodelle.md`](adr/0010-eine-codebasis-zwei-betriebsmodelle.md).
 
+### 13.1 Lizenzierung und Sitzplätze
+
+ZeitVault wird **pro Mitarbeitenden (Sitzplatz)** als Paket lizenziert (z. B.
+5/10/15 oder mehr). Menüpunkt **„Lizenz"** (nur Vorgesetzte/Admins) zeigt den
+Status: Paket, belegte/verfügbare Sitzplätze und Gültigkeit.
+
+- **Sitzplatzzählung:** „Belegt" ist die Anzahl **aktiver** Mitarbeitender.
+  Gesperrte oder pseudonymisierte Mitarbeitende zählen nicht.
+- **Durchsetzung:** Ist das Kontingent erschöpft, lehnt das System das Anlegen
+  weiterer Mitarbeitender ab. Für mehr Sitzplätze eine größere Lizenz aktivieren.
+- **Lizenz aktivieren (Admin):** Das vom Hersteller ausgestellte, **signierte
+  Lizenz-Token** im Feld „Lizenz aktivieren" einfügen. Der Server prüft Signatur,
+  Mandant und Laufzeit **offline** (kein Phone-Home) und protokolliert die
+  Aktivierung revisionssicher.
+- **Testmodus:** Ohne gültige Lizenz gilt ein kleines Sitzplatz-Kontingent, damit
+  Ersteinrichtung und Demo möglich bleiben; der Status weist dies als „Testmodus"
+  aus.
+
+> Der private Signaturschlüssel liegt ausschließlich beim Hersteller; beim Kunden
+> wird nur der öffentliche Schlüssel konfiguriert. Details:
+> [`adr/0013-lizenzierung-pro-mitarbeiter.md`](adr/0013-lizenzierung-pro-mitarbeiter.md).
+
 ---
 
 ## 14. Häufige Aufgaben (Schritt für Schritt)
@@ -373,6 +395,11 @@ aufbewahrt und werden dann automatisiert gelöscht.
 **Ein Arbeitszeitmodell anpassen:**
 Bereich „Verwaltung" → Arbeitszeitmodelle → neue Version mit geänderten
 Sollzeiten anlegen. Die alte Version bleibt für Auswertungen erhalten.
+
+**Eine Lizenz aktivieren und Sitzplätze belegen:**
+Bereich „Lizenz" → signiertes Lizenz-Token einfügen → „Lizenz aktivieren". Danach
+unter „Mitarbeitende/n anlegen" neue Personen hinzufügen; jede belegt einen
+Sitzplatz. Ist das Kontingent voll, eine größere Lizenz aktivieren.
 
 ---
 

@@ -13,3 +13,5 @@ export * from './retention';
 export * from './project';
 export * from './eau';
 export * from './correction';
+export * from './license';
+export * from './employee';

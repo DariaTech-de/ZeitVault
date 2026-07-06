@@ -39,6 +39,26 @@ pnpm --filter @zeitvault/api db:migrate
 pnpm --filter @zeitvault/api seed        # verknüpft Demo-Mitarbeitende mit den Keycloak-Subjects
 ```
 
+### 3.1 Lizenzierung (Sitzplätze)
+
+ZeitVault wird pro Mitarbeitenden (Sitzplatz) lizenziert (ADR-0013). Der Server
+prüft eine signierte Lizenz **offline** gegen den konfigurierten öffentlichen
+Schlüssel `LICENSE_PUBLIC_KEY` (PEM). Ohne Lizenz gilt ein Testmodus-Kontingent
+(`LICENSE_GRACE_SEATS`, Default 5).
+
+```bash
+# Einmalig beim Hersteller: Schlüsselpaar erzeugen (öffentlichen Teil ausliefern)
+pnpm --filter @zeitvault/api license:issue -- --genkey > /dev/stdout
+
+# Lizenz signieren (privater Schlüssel NUR beim Hersteller, nie im Repo):
+LICENSE_PRIVATE_KEY_FILE=./license-private.pem \
+  pnpm --filter @zeitvault/api license:issue -- \
+    --tenant default --customer "Muster GmbH" --tier "Team 10" --seats 10 --days 365
+```
+
+Den öffentlichen Schlüssel beim Kunden als `LICENSE_PUBLIC_KEY` setzen. Die
+Administration aktiviert das ausgegebene Token in der Web-App unter **„Lizenz"**.
+
 ## 4. Automatische Stack-Verifikation (ein Befehl)
 
 `scripts/verify-stack.sh` prüft die kritischen Workflows und Invarianten über HTTP. Zwei Modi:

@@ -13,7 +13,8 @@
     "dev": "nest start --watch",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx src/db/migrate.ts",
-    "seed": "tsx src/db/seed.ts"
+    "seed": "tsx src/db/seed.ts",
+    "license:issue": "tsx src/licensing/issue-license.ts"
   },
   "dependencies": {
     "@nestjs/common": "^11.0.0",

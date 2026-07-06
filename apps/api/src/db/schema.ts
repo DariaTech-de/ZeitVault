@@ -3,6 +3,7 @@ import {
   date,
   index,
   integer,
+  jsonb,
   pgEnum,
   pgTable,
   text,
@@ -321,6 +322,27 @@ export const stampCorrectionRequests = pgTable(
   ],
 );
 export type StampCorrectionRequestRow = typeof stampCorrectionRequests.$inferSelect;
+
+/**
+ * Lizenz je Mandant (Sitzplatz-Modell). Speichert das signierte Token und die
+ * daraus verifizierten Felder; genau eine aktive Lizenz je Mandant (siehe
+ * migrations/0015). Der oeffentliche Schluessel zur Pruefung ist konfiguriert.
+ */
+export const licenses = pgTable('licenses', {
+  tenantId: varchar('tenant_id', { length: 64 }).primaryKey(),
+  licenseId: uuid('license_id').notNull(),
+  customer: varchar('customer', { length: 200 }).notNull(),
+  tier: varchar('tier', { length: 64 }).notNull(),
+  seats: integer('seats').notNull(),
+  issuedAt: timestamp('issued_at', { withTimezone: true }).notNull(),
+  validUntil: timestamp('valid_until', { withTimezone: true }).notNull(),
+  features: jsonb('features').notNull().default([]),
+  token: text('token').notNull(),
+  activatedBy: varchar('activated_by', { length: 128 }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type LicenseRow = typeof licenses.$inferSelect;
 
 /** Versionierte Arbeitszeitmodelle (Sollzeit je Wochentag in Minuten). */
 export const workTimeModels = pgTable(
