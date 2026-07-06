@@ -1,21 +1,25 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { AppNav } from '@/components/app-nav';
 import { AuthGate } from '@/components/auth-gate';
+import { ShellBar } from '@/components/fiori/shell-bar';
+import { ThemeScript } from '@/components/fiori/theme-script';
 import { AuthProvider } from '@/lib/auth';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'ZeitVault - Zeiterfassung',
-  description: 'Self-Service-Zeiterfassung (Kommen, Gehen, Pausen).',
+  title: 'ZeitVault - Zeitwirtschaft',
+  description: 'Enterprise-Zeiterfassung: Stempeln, Abwesenheit, Konten, Auswertungen.',
 };
 
 export default function RootLayout({ children }: Readonly<{ children: ReactNode }>) {
   return (
-    <html lang="de">
-      <body className="min-h-screen bg-slate-50 text-slate-900 antialiased">
+    <html lang="de" suppressHydrationWarning>
+      <head>
+        <ThemeScript />
+      </head>
+      <body className="min-h-screen bg-bg text-ink antialiased">
         <AuthProvider>
-          <AppNav />
+          <ShellBar />
           <AuthGate>{children}</AuthGate>
         </AuthProvider>
       </body>

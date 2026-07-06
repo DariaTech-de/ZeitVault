@@ -1,1 +1,130 @@
 @import "tailwindcss";
+
+/* ============================================================================
+   ZeitVault Design-System – Fiori/Horizon-inspiriert, token-basiert.
+   Semantische Tokens als CSS-Variablen (Light/Dark), via @theme inline als
+   Tailwind-Utilities verfügbar (bg-surface, text-ink, border-line, text-primary …).
+   ========================================================================== */
+
+:root {
+  --bg: #eef1f5;
+  --surface: #ffffff;
+  --surface-2: #f6f8fb;
+  --surface-3: #eef2f7;
+  --ink: #1b2733;
+  --ink-muted: #5b6b7b;
+  --ink-faint: #8695a5;
+  --line: #d7dde5;
+  --line-strong: #c2cad4;
+  --primary: #0064d9;
+  --primary-hover: #0053b6;
+  --on-primary: #ffffff;
+  --primary-weak: #e7f0fd;
+  --teal: #0a8f8a;
+  --teal-weak: #e2f2f1;
+  --pos: #1f7a2e;   --pos-bg: #e6f3e8;
+  --warn: #a85a06;  --warn-bg: #faeede;
+  --neg: #bd2626;   --neg-bg: #fbe8e8;
+  --info: #0064d9;  --info-bg: #e7f0fd;
+  --shadow-sm: 0 1px 2px rgba(20, 38, 64, .07);
+  --shadow: 0 1px 2px rgba(20, 38, 64, .06), 0 10px 26px -14px rgba(20, 38, 64, .28);
+  --shadow-lg: 0 2px 6px rgba(20, 38, 64, .08), 0 24px 50px -22px rgba(20, 38, 64, .42);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f151b;
+    --surface: #1b232c;
+    --surface-2: #212b35;
+    --surface-3: #27333e;
+    --ink: #e7edf4;
+    --ink-muted: #a2b2c2;
+    --ink-faint: #748899;
+    --line: #313d49;
+    --line-strong: #3d4b59;
+    --primary: #4aa6ff;
+    --primary-hover: #6bb8ff;
+    --on-primary: #062138;
+    --primary-weak: #17324b;
+    --teal: #37c3bb;
+    --teal-weak: #123433;
+    --pos: #5fc563;   --pos-bg: #15311a;
+    --warn: #e79a45;  --warn-bg: #372711;
+    --neg: #f0706f;   --neg-bg: #381a1a;
+    --info: #4aa6ff;  --info-bg: #17324b;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 30px -16px rgba(0, 0, 0, .7);
+    --shadow-lg: 0 2px 6px rgba(0, 0, 0, .5), 0 26px 56px -24px rgba(0, 0, 0, .8);
+  }
+}
+
+/* Expliziter Theme-Umschalter überschreibt die OS-Präferenz in beide Richtungen. */
+:root[data-theme="light"] {
+  --bg: #eef1f5; --surface: #ffffff; --surface-2: #f6f8fb; --surface-3: #eef2f7;
+  --ink: #1b2733; --ink-muted: #5b6b7b; --ink-faint: #8695a5;
+  --line: #d7dde5; --line-strong: #c2cad4;
+  --primary: #0064d9; --primary-hover: #0053b6; --on-primary: #ffffff; --primary-weak: #e7f0fd;
+  --teal: #0a8f8a; --teal-weak: #e2f2f1;
+  --pos: #1f7a2e; --pos-bg: #e6f3e8; --warn: #a85a06; --warn-bg: #faeede;
+  --neg: #bd2626; --neg-bg: #fbe8e8; --info: #0064d9; --info-bg: #e7f0fd;
+  --shadow-sm: 0 1px 2px rgba(20, 38, 64, .07);
+  --shadow: 0 1px 2px rgba(20, 38, 64, .06), 0 10px 26px -14px rgba(20, 38, 64, .28);
+  --shadow-lg: 0 2px 6px rgba(20, 38, 64, .08), 0 24px 50px -22px rgba(20, 38, 64, .42);
+}
+:root[data-theme="dark"] {
+  --bg: #0f151b; --surface: #1b232c; --surface-2: #212b35; --surface-3: #27333e;
+  --ink: #e7edf4; --ink-muted: #a2b2c2; --ink-faint: #748899;
+  --line: #313d49; --line-strong: #3d4b59;
+  --primary: #4aa6ff; --primary-hover: #6bb8ff; --on-primary: #062138; --primary-weak: #17324b;
+  --teal: #37c3bb; --teal-weak: #123433;
+  --pos: #5fc563; --pos-bg: #15311a; --warn: #e79a45; --warn-bg: #372711;
+  --neg: #f0706f; --neg-bg: #381a1a; --info: #4aa6ff; --info-bg: #17324b;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .45);
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 12px 30px -16px rgba(0, 0, 0, .7);
+  --shadow-lg: 0 2px 6px rgba(0, 0, 0, .5), 0 26px 56px -24px rgba(0, 0, 0, .8);
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-ink: var(--ink);
+  --color-ink-muted: var(--ink-muted);
+  --color-ink-faint: var(--ink-faint);
+  --color-line: var(--line);
+  --color-line-strong: var(--line-strong);
+  --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
+  --color-on-primary: var(--on-primary);
+  --color-primary-weak: var(--primary-weak);
+  --color-teal: var(--teal);
+  --color-teal-weak: var(--teal-weak);
+  --color-pos: var(--pos);
+  --color-pos-bg: var(--pos-bg);
+  --color-warn: var(--warn);
+  --color-warn-bg: var(--warn-bg);
+  --color-neg: var(--neg);
+  --color-neg-bg: var(--neg-bg);
+  --color-info: var(--info);
+  --color-info-bg: var(--info-bg);
+  --font-sans: ui-sans-serif, system-ui, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --radius-card: 14px;
+}
+
+@layer base {
+  html { background: var(--bg); }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-sans);
+    letter-spacing: -0.01em;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* Tabellarische Ziffern für alle Zeit-/Saldo-Daten. */
+  .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: 0; }
+  h1, h2, h3 { text-wrap: balance; letter-spacing: -0.02em; }
+  ::selection { background: var(--primary-weak); }
+  :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+}
