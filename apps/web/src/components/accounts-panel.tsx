@@ -1,9 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatusPill } from '@/components/fiori/status-pill';
+import {
+  Button,
+  Card,
+  DataTable,
+  Empty,
+  ErrorNote,
+  Field,
+  Kpi,
+  KpiRow,
+  PageHead,
+  Select,
+  SectionTitle,
+  TextInput,
+} from '@/components/fiori/ui';
 import {
   type AccountBalance,
   type AccountKind,
@@ -15,24 +27,18 @@ import {
 import { useAuth } from '@/lib/auth';
 import type { Identity } from '@/lib/identity';
 
-const ACCOUNT_LABEL: Record<AccountKind, string> = {
-  overtime: 'Überstunden',
-  flextime: 'Gleitzeit',
-  vacation: 'Urlaub',
-};
+const ACCOUNT_LABEL: Record<AccountKind, string> = { overtime: 'Überstunden', flextime: 'Gleitzeit', vacation: 'Urlaub' };
 
-/** Minuten (overtime/flextime) bzw. Tage (vacation) lesbar darstellen. */
-function formatAmount(account: AccountKind, value: number): string {
-  if (account === 'vacation') {
-    return `${value} ${Math.abs(value) === 1 ? 'Tag' : 'Tage'}`;
-  }
+function fmt(account: AccountKind, value: number): string {
+  if (account === 'vacation') return `${value} ${Math.abs(value) === 1 ? 'Tag' : 'Tage'}`;
   const sign = value < 0 ? '-' : '';
   const abs = Math.abs(value);
-  return `${sign}${Math.floor(abs / 60)} h ${String(abs % 60).padStart(2, '0')} min`;
+  return `${sign}${Math.floor(abs / 60)}:${String(abs % 60).padStart(2, '0')} h`;
 }
 
 export function AccountsPanel() {
   const { identity } = useAuth();
+  const canPost = identity?.roles.some((r) => r === 'manager' || r === 'admin') ?? false;
   const [balances, setBalances] = useState<AccountBalance[]>([]);
   const [statement, setStatement] = useState<StatementLine[]>([]);
   const [account, setAccount] = useState<AccountKind>('overtime');
@@ -42,19 +48,14 @@ export function AccountsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const canPost = identity?.roles.some((r) => r === 'manager' || r === 'admin') ?? false;
-
   const refresh = useCallback(async (id: Identity) => {
     try {
-      const [b, s] = await Promise.all([
-        fetchBalances(id, id.employeeId),
-        fetchStatement(id, id.employeeId),
-      ]);
+      const [b, s] = await Promise.all([fetchBalances(id, id.employeeId), fetchStatement(id, id.employeeId)]);
       setBalances(b);
       setStatement(s);
       setError(null);
     } catch {
-      setError('Backend nicht erreichbar. Bitte die API (apps/api) starten.');
+      setError('Backend nicht erreichbar. Bitte die API starten.');
     }
   }, []);
 
@@ -83,116 +84,82 @@ export function AccountsPanel() {
     }
   }, [identity, account, amount, effectiveDate, reason, refresh]);
 
+  const bal = (a: AccountKind) => balances.find((b) => b.account === a)?.balance ?? 0;
+
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Salden</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-3 gap-3">
-            {balances.map((b) => (
-              <div key={b.account} className="rounded-md border border-slate-200 px-3 py-2">
-                <div className="text-xs text-slate-500">{ACCOUNT_LABEL[b.account]}</div>
-                <div className="text-lg font-semibold text-slate-800">
-                  {formatAmount(b.account, b.balance)}
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
+    <>
+      <PageHead
+        eyebrow="Zeitwirtschaft · Konten"
+        title="Arbeitszeitkonten"
+        sub="Überstunden-, Gleitzeit- und Urlaubssaldo. Buchungen sind append-only; Korrekturen erfolgen ausschließlich über Gegenbuchungen."
+      />
+
+      <KpiRow>
+        <Kpi k="Überstunden" v={fmt('overtime', bal('overtime'))} tone={bal('overtime') < 0 ? 'neg' : 'pos'} />
+        <Kpi k="Gleitzeit" v={fmt('flextime', bal('flextime'))} />
+        <Kpi k="Urlaub" v={fmt('vacation', bal('vacation'))} />
+      </KpiRow>
 
       {canPost && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Buchung erfassen</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-              <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Konto</span>
-                <select
-                  className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                  value={account}
-                  onChange={(e) => setAccount(e.target.value as AccountKind)}
-                >
-                  <option value="overtime">Überstunden (Minuten)</option>
-                  <option value="flextime">Gleitzeit (Minuten)</option>
-                  <option value="vacation">Urlaub (Tage)</option>
-                </select>
-              </label>
-              <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Betrag (+/-)</span>
-                <input
-                  type="number"
-                  step="1"
-                  className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                />
-              </label>
-              <label className="space-y-1 text-sm">
-                <span className="text-slate-600">Wirksam am</span>
-                <input
-                  type="date"
-                  className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                  value={effectiveDate}
-                  onChange={(e) => setEffectiveDate(e.target.value)}
-                />
-              </label>
-            </div>
-            <label className="block space-y-1 text-sm">
-              <span className="text-slate-600">Begründung (optional)</span>
-              <input
-                type="text"
-                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                maxLength={500}
-              />
-            </label>
-            <Button disabled={pending || !amount || !effectiveDate} onClick={() => void onPost()}>
+        <Card className="mt-5 p-5">
+          <h2 className="text-base font-semibold">Buchung erfassen</h2>
+          <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-4">
+            <Field label="Konto">
+              <Select value={account} onChange={(e) => setAccount(e.target.value as AccountKind)}>
+                <option value="overtime">Überstunden (Minuten)</option>
+                <option value="flextime">Gleitzeit (Minuten)</option>
+                <option value="vacation">Urlaub (Tage)</option>
+              </Select>
+            </Field>
+            <Field label="Betrag (+/-)">
+              <TextInput type="number" step="1" value={amount} onChange={(e) => setAmount(e.target.value)} />
+            </Field>
+            <Field label="Wirksam am">
+              <TextInput type="date" value={effectiveDate} onChange={(e) => setEffectiveDate(e.target.value)} />
+            </Field>
+            <Field label="Begründung (optional)">
+              <TextInput value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+            </Field>
+          </div>
+          <div className="mt-4">
+            <Button variant="primary" disabled={pending || !amount || !effectiveDate} onClick={() => void onPost()}>
               Buchen
             </Button>
-          </CardContent>
+          </div>
         </Card>
       )}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Kontoauszug</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          {statement.length === 0 ? (
-            <p className="text-sm text-slate-500">Keine Buchungen vorhanden.</p>
-          ) : (
-            <ul className="space-y-1">
-              {statement.map((line, index) => (
-                <li
-                  key={`${line.account}-${line.effectiveDate}-${index}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
-                >
-                  <span className="flex items-center gap-2">
-                    <Badge>{ACCOUNT_LABEL[line.account]}</Badge>
-                    <span className="text-slate-600">{line.effectiveDate}</span>
-                    {line.reason && <span className="text-slate-500">{line.reason}</span>}
-                  </span>
-                  <span className="flex items-center gap-3">
-                    <span className={line.amount < 0 ? 'text-red-700' : 'text-emerald-700'}>
-                      {formatAmount(line.account, line.amount)}
-                    </span>
-                    <span className="font-medium text-slate-800">
-                      = {formatAmount(line.account, line.runningBalance)}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        </CardContent>
-      </Card>
-    </div>
+      <SectionTitle>Kontoauszug</SectionTitle>
+      {statement.length === 0 ? (
+        <Empty>Keine Buchungen vorhanden.</Empty>
+      ) : (
+        <DataTable
+          head={
+            <>
+              <th className="px-4 py-2.5 font-semibold">Datum</th>
+              <th className="px-4 py-2.5 font-semibold">Konto</th>
+              <th className="px-4 py-2.5 font-semibold">Begründung</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Betrag</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Saldo</th>
+            </>
+          }
+        >
+          {statement.map((line, i) => (
+            <tr key={`${line.account}-${line.effectiveDate}-${i}`} className="border-b border-line last:border-0">
+              <td className="mono px-4 py-2.5 text-ink-muted">{line.effectiveDate}</td>
+              <td className="px-4 py-2.5">
+                <StatusPill tone="neutral" dot={false}>{ACCOUNT_LABEL[line.account]}</StatusPill>
+              </td>
+              <td className="px-4 py-2.5 text-ink-muted">{line.reason ?? '—'}</td>
+              <td className={`mono px-4 py-2.5 text-right ${line.amount < 0 ? 'text-neg' : 'text-pos'}`}>
+                {fmt(line.account, line.amount)}
+              </td>
+              <td className="mono px-4 py-2.5 text-right font-semibold">{fmt(line.account, line.runningBalance)}</td>
+            </tr>
+          ))}
+        </DataTable>
+      )}
+      {error && <div className="mt-3"><ErrorNote>{error}</ErrorNote></div>}
+    </>
   );
 }

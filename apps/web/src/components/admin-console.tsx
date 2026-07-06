@@ -1,16 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { MessageStrip } from '@/components/fiori/message-strip';
+import { StatusPill } from '@/components/fiori/status-pill';
 import {
-  type DayListing,
-  type EmployeeSummary,
-  fetchDayEvents,
-  fetchEmployees,
-  postCorrection,
-} from '@/lib/api';
+  Avatar,
+  Button,
+  Empty,
+  ErrorNote,
+  Facet,
+  Facets,
+  ObjectHeader,
+  PageHead,
+  Row,
+  Worklist,
+} from '@/components/fiori/ui';
+import { type DayListing, type EmployeeSummary, fetchDayEvents, fetchEmployees, postCorrection } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
 const KIND_LABEL: Record<string, string> = {
@@ -21,17 +26,14 @@ const KIND_LABEL: Record<string, string> = {
 };
 
 function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('de-DE', {
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  });
+  return new Date(iso).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'UTC' });
 }
-
 function formatMinutes(total: number): string {
-  const hours = Math.floor(total / 60);
-  const minutes = Math.round(total % 60);
-  return `${hours} h ${String(minutes).padStart(2, '0')} min`;
+  return `${Math.floor(total / 60)}:${String(Math.round(total % 60)).padStart(2, '0')} h`;
+}
+function initials(name: string): string {
+  const p = name.split(' ');
+  return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase();
 }
 
 export function AdminConsole() {
@@ -48,11 +50,7 @@ export function AdminConsole() {
         setEmployees(list);
         setError(null);
       })
-      .catch(() =>
-        setError(
-          'Mitarbeitende konnten nicht geladen werden (Admin-Rolle nötig; API erreichbar?).',
-        ),
-      );
+      .catch(() => setError('Mitarbeitende konnten nicht geladen werden (Admin-Rolle nötig; API erreichbar?).'));
   }, [identity]);
 
   const loadDay = useCallback(
@@ -86,94 +84,99 @@ export function AdminConsole() {
     [identity, selected, loadDay],
   );
 
+  const selectedEmp = employees.find((e) => e.id === selected);
+
   return (
-    <div className="grid gap-6 md:grid-cols-[260px_1fr]">
-      <Card>
-        <CardHeader>
-          <CardTitle>Mitarbeitende</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-1">
-          {employees.length === 0 && <p className="text-sm text-slate-500">Keine Daten.</p>}
-          {employees.map((emp) => (
-            <button
-              key={emp.id}
-              onClick={() => void loadDay(emp.id)}
-              className={`w-full rounded-md px-3 py-2 text-left text-sm hover:bg-slate-100 ${
-                selected === emp.id ? 'bg-slate-100 font-medium' : ''
-              }`}
-            >
-              {emp.displayName}
-              <span className="block text-xs text-slate-400">Pers.-Nr. {emp.personnelNumber}</span>
-            </button>
-          ))}
-        </CardContent>
-      </Card>
+    <>
+      <PageHead
+        eyebrow="Verwaltung"
+        title="Mitarbeitende & Tageskorrektur"
+        sub="Stempelungen einsehen und korrigieren. Korrekturen erzeugen eine neue Revision; der Vorgänger bleibt erhalten (GoBD)."
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Tagesübersicht</CardTitle>
-          {day && (
-            <div className="text-sm text-slate-600">
-              Arbeit {formatMinutes(day.status.workedMinutes)} &middot; Pause{' '}
-              {formatMinutes(day.status.breakMinutes)}
-            </div>
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[300px_1fr]">
+        <Worklist className="h-fit">
+          {employees.length === 0 ? (
+            <Empty>Keine Daten.</Empty>
+          ) : (
+            employees.map((emp) => (
+              <Row key={emp.id} selected={selected === emp.id} onClick={() => void loadDay(emp.id)}>
+                <Avatar>{initials(emp.displayName)}</Avatar>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">{emp.displayName}</span>
+                  <span className="mono block text-[12px] text-ink-faint">Pers.-Nr. {emp.personnelNumber}</span>
+                </span>
+              </Row>
+            ))
           )}
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {!day && <p className="text-sm text-slate-500">Mitarbeiter:in links auswählen.</p>}
+        </Worklist>
 
-          {day && day.findings.length > 0 && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-slate-700">Verstoßreport (ArbZG)</h3>
-              <ul className="space-y-1">
-                {day.findings.map((finding, index) => (
-                  <li key={`${finding.code}-${index}`} className="flex items-center gap-2 text-sm">
-                    <Badge variant={finding.severity === 'violation' ? 'violation' : 'warning'}>
-                      {finding.severity === 'violation' ? 'Verstoß' : 'Warnung'}
-                    </Badge>
-                    <span className="text-slate-700">{finding.message}</span>
-                  </li>
-                ))}
-              </ul>
+        <div>
+          {!day ? (
+            <div className="rounded-card border border-dashed border-line bg-surface px-5 py-16 text-center text-sm text-ink-faint">
+              Mitarbeiter:in links auswählen.
             </div>
-          )}
+          ) : (
+            <div className="rounded-card [box-shadow:var(--shadow)]">
+              <ObjectHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h2 className="text-lg font-semibold">{selectedEmp?.displayName ?? 'Tag'}</h2>
+                    <p className="mono mt-1 text-sm text-ink-muted">Pers.-Nr. {selectedEmp?.personnelNumber ?? '—'}</p>
+                  </div>
+                  {day.findings.length > 0 ? (
+                    <StatusPill tone="negative">{day.findings.length} Befund(e)</StatusPill>
+                  ) : (
+                    <StatusPill tone="positive">konform</StatusPill>
+                  )}
+                </div>
+              </ObjectHeader>
+              <Facets>
+                <Facet k="Gearbeitet" v={<span className="mono">{formatMinutes(day.status.workedMinutes)}</span>} />
+                <Facet k="Pause" v={<span className="mono">{formatMinutes(day.status.breakMinutes)}</span>} />
+                <Facet k="Ereignisse" v={<span className="mono">{day.events.length}</span>} />
+                <Facet k="Status" v={day.status.state === 'out' ? 'Ausgestempelt' : day.status.state === 'break' ? 'Pause' : 'Aktiv'} />
+              </Facets>
 
-          {day && (
-            <div className="space-y-2">
-              <h3 className="text-sm font-medium text-slate-700">Stempelungen (Historie)</h3>
-              <ul className="divide-y divide-slate-100">
-                {day.events.map((event) => (
-                  <li key={event.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-                    <div>
-                      <span className="font-medium">{KIND_LABEL[event.kind] ?? event.kind}</span>{' '}
-                      <span className="text-slate-600">{formatTime(event.occurredAt)}</span>
-                      {event.correctsEventId && (
-                        <Badge variant="warning" className="ml-2">
-                          Korrektur
-                        </Badge>
+              {day.findings.length > 0 && (
+                <div className="border-x border-line bg-surface px-5 py-4">
+                  <MessageStrip tone="negative">
+                    {day.findings.map((f) => f.message).join(' · ')}
+                  </MessageStrip>
+                </div>
+              )}
+
+              <div className="rounded-b-card border-x border-b border-line bg-surface px-5 py-4">
+                <h3 className="mb-2 text-[12.5px] font-semibold uppercase tracking-wide text-ink-faint">
+                  Stempelungen (Historie)
+                </h3>
+                <ul className="divide-y divide-line">
+                  {day.events.map((event) => (
+                    <li key={event.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
+                      <div>
+                        <span className="font-semibold">{KIND_LABEL[event.kind] ?? event.kind}</span>{' '}
+                        <span className="mono text-ink-muted">{formatTime(event.occurredAt)}</span>
+                        {event.correctsEventId && (
+                          <StatusPill tone="warning" className="ml-2">Korrektur</StatusPill>
+                        )}
+                        {event.correctionReason && (
+                          <span className="mt-0.5 block text-xs text-ink-faint">{event.correctionReason}</span>
+                        )}
+                      </div>
+                      {!event.correctsEventId && (
+                        <Button size="sm" onClick={() => void correct(event.id, event.occurredAt)}>
+                          Korrigieren
+                        </Button>
                       )}
-                      {event.correctionReason && (
-                        <span className="block text-xs text-slate-400">{event.correctionReason}</span>
-                      )}
-                    </div>
-                    {!event.correctsEventId && (
-                      <Button
-                        variant="outline"
-                        className="h-8 px-3 text-xs"
-                        onClick={() => void correct(event.id, event.occurredAt)}
-                      >
-                        Korrigieren
-                      </Button>
-                    )}
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           )}
-
-          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        </CardContent>
-      </Card>
-    </div>
+          {error && <div className="mt-3"><ErrorNote>{error}</ErrorNote></div>}
+        </div>
+      </div>
+    </>
   );
 }

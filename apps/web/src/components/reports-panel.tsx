@@ -1,9 +1,19 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { StatusPill } from '@/components/fiori/status-pill';
+import {
+  Button,
+  Card,
+  DataTable,
+  Empty,
+  ErrorNote,
+  FilterBar,
+  FilterLabel,
+  PageHead,
+  SectionTitle,
+  TextInput,
+} from '@/components/fiori/ui';
 import {
   type BalanceListEntry,
   type ViolationEntry,
@@ -21,6 +31,7 @@ export function ReportsPanel() {
   const [to, setTo] = useState('2026-06-30');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
+  const [evaluated, setEvaluated] = useState(false);
 
   const loadBalances = useCallback(async (id: Identity) => {
     try {
@@ -40,6 +51,7 @@ export function ReportsPanel() {
     setPending(true);
     try {
       setViolations(await fetchViolations(identity, from, to));
+      setEvaluated(true);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Auswertung fehlgeschlagen.');
@@ -49,100 +61,79 @@ export function ReportsPanel() {
   }, [identity, from, to]);
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Saldenliste</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {balances.length === 0 ? (
-            <p className="text-sm text-slate-500">Keine Daten.</p>
-          ) : (
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-slate-500">
-                  <th className="py-1">Mitarbeitende</th>
-                  <th className="py-1">Überstunden (min)</th>
-                  <th className="py-1">Gleitzeit (min)</th>
-                  <th className="py-1">Urlaub (Tage)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {balances.map((e) => {
-                  const by = Object.fromEntries(e.balances.map((b) => [b.account, b.balance]));
-                  return (
-                    <tr key={e.employeeId} className="border-t border-slate-100">
-                      <td className="py-1 text-slate-700">{e.displayName}</td>
-                      <td className="py-1">{by.overtime ?? 0}</td>
-                      <td className="py-1">{by.flextime ?? 0}</td>
-                      <td className="py-1">{by.vacation ?? 0}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </CardContent>
-      </Card>
+    <>
+      <PageHead
+        eyebrow="Auswertungen"
+        title="Saldenliste & Verstoßreport"
+        sub="Kontosalden aller Mitarbeitenden und ArbZG-Befunde je Zeitraum. Rein berechnet aus den revisionssicheren Erfassungsdaten."
+        right={<StatusPill tone="neutral">{balances.length} Mitarbeitende</StatusPill>}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Verstoßreport (ArbZG)</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="flex flex-wrap items-end gap-3">
-            <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Von</span>
-              <input
-                type="date"
-                className="block rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Bis</span>
-              <input
-                type="date"
-                className="block rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </label>
-            <Button disabled={pending} onClick={() => void loadViolations()}>
-              Auswerten
-            </Button>
-          </div>
-          {violations.length === 0 ? (
-            <p className="text-sm text-slate-500">Keine Verstöße im Zeitraum (oder noch nicht ausgewertet).</p>
-          ) : (
-            <ul className="space-y-2">
-              {violations.map((v, index) => (
-                <li
-                  key={`${v.employeeId}-${v.date}-${index}`}
-                  className="rounded-md border border-slate-200 px-3 py-2 text-sm"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-medium text-slate-700">{v.displayName}</span>
-                    <span className="text-slate-500">{v.date}</span>
-                  </div>
-                  <ul className="mt-1 space-y-1">
-                    {v.findings.map((f, i) => (
-                      <li key={`${f.code}-${i}`} className="flex items-center gap-2">
-                        <Badge variant={f.severity === 'violation' ? 'violation' : 'warning'}>
-                          {f.severity === 'violation' ? 'Verstoß' : 'Warnung'}
-                        </Badge>
-                        <span className="text-slate-700">{f.message}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
-            </ul>
-          )}
-          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        </CardContent>
-      </Card>
-    </div>
+      <SectionTitle>Saldenliste</SectionTitle>
+      {balances.length === 0 ? (
+        <Empty>Keine Daten.</Empty>
+      ) : (
+        <DataTable
+          head={
+            <>
+              <th className="px-4 py-2.5 font-semibold">Mitarbeitende</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Überstunden (min)</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Gleitzeit (min)</th>
+              <th className="px-4 py-2.5 text-right font-semibold">Urlaub (Tage)</th>
+            </>
+          }
+        >
+          {balances.map((e) => {
+            const by = Object.fromEntries(e.balances.map((b) => [b.account, b.balance]));
+            return (
+              <tr key={e.employeeId} className="border-b border-line last:border-0">
+                <td className="px-4 py-2.5 font-medium">{e.displayName}</td>
+                <td className="mono px-4 py-2.5 text-right">{by.overtime ?? 0}</td>
+                <td className="mono px-4 py-2.5 text-right">{by.flextime ?? 0}</td>
+                <td className="mono px-4 py-2.5 text-right">{by.vacation ?? 0}</td>
+              </tr>
+            );
+          })}
+        </DataTable>
+      )}
+
+      <SectionTitle>Verstoßreport (ArbZG)</SectionTitle>
+      <FilterBar>
+        <FilterLabel>Zeitraum</FilterLabel>
+        <TextInput type="date" className="w-auto" value={from} onChange={(e) => setFrom(e.target.value)} />
+        <span className="text-ink-faint">–</span>
+        <TextInput type="date" className="w-auto" value={to} onChange={(e) => setTo(e.target.value)} />
+        <span className="flex-1" />
+        <Button variant="primary" disabled={pending} onClick={() => void loadViolations()}>
+          Auswerten
+        </Button>
+      </FilterBar>
+
+      {violations.length === 0 ? (
+        <Empty>{evaluated ? 'Keine Verstöße im Zeitraum.' : 'Zeitraum wählen und auswerten.'}</Empty>
+      ) : (
+        <div className="space-y-3">
+          {violations.map((v, index) => (
+            <Card key={`${v.employeeId}-${v.date}-${index}`} className="px-4 py-3">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">{v.displayName}</span>
+                <span className="mono text-sm text-ink-faint">{v.date}</span>
+              </div>
+              <ul className="mt-2 space-y-1.5">
+                {v.findings.map((f, i) => (
+                  <li key={`${f.code}-${i}`} className="flex items-center gap-2">
+                    <StatusPill tone={f.severity === 'violation' ? 'negative' : 'warning'}>
+                      {f.severity === 'violation' ? 'Verstoß' : 'Warnung'}
+                    </StatusPill>
+                    <span className="text-sm text-ink">{f.message}</span>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          ))}
+        </div>
+      )}
+      {error && <div className="mt-3"><ErrorNote>{error}</ErrorNote></div>}
+    </>
   );
 }

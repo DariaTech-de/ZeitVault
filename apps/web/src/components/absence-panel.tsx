@@ -1,9 +1,21 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { MessageStrip } from '@/components/fiori/message-strip';
+import { StatusPill } from '@/components/fiori/status-pill';
+import {
+  Avatar,
+  Button,
+  Card,
+  Empty,
+  ErrorNote,
+  Field,
+  PageHead,
+  Row,
+  Select,
+  TextInput,
+  Worklist,
+} from '@/components/fiori/ui';
 import {
   type AbsenceAction,
   type AbsenceRequest,
@@ -16,28 +28,23 @@ import {
 import { useAuth } from '@/lib/auth';
 import type { Identity } from '@/lib/identity';
 
-const TYPE_LABEL: Record<AbsenceType, string> = {
-  vacation: 'Urlaub',
-  sick: 'Krankheit',
-  special: 'Sonderurlaub',
-};
-
+const TYPE_LABEL: Record<AbsenceType, string> = { vacation: 'Urlaub', sick: 'Krankheit', special: 'Sonderurlaub' };
 const STATUS_LABEL: Record<AbsenceStatus, string> = {
   requested: 'Beantragt',
   approved: 'Genehmigt',
   rejected: 'Abgelehnt',
   cancelled: 'Storniert',
 };
-
-function statusVariant(status: AbsenceStatus): 'default' | 'success' | 'warning' | 'violation' {
-  if (status === 'approved') return 'success';
-  if (status === 'rejected') return 'violation';
-  if (status === 'cancelled') return 'warning';
-  return 'default';
-}
+const STATUS_TONE: Record<AbsenceStatus, 'warning' | 'positive' | 'negative' | 'neutral'> = {
+  requested: 'warning',
+  approved: 'positive',
+  rejected: 'negative',
+  cancelled: 'neutral',
+};
 
 export function AbsencePanel() {
   const { identity } = useAuth();
+  const canApprove = identity?.roles.some((r) => r === 'manager' || r === 'admin') ?? false;
   const [requests, setRequests] = useState<AbsenceRequest[]>([]);
   const [type, setType] = useState<AbsenceType>('vacation');
   const [from, setFrom] = useState('');
@@ -46,17 +53,13 @@ export function AbsencePanel() {
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
 
-  const canApprove = identity?.roles.some((r) => r === 'manager' || r === 'admin') ?? false;
-
   const refresh = useCallback(async (id: Identity) => {
     try {
-      // Vorgesetzte/Administration sehen alle Antraege, Mitarbeitende nur eigene.
       const all = id.roles.some((r) => r === 'manager' || r === 'admin');
-      const data = await fetchAbsences(id, all ? undefined : id.employeeId);
-      setRequests(data);
+      setRequests(await fetchAbsences(id, all ? undefined : id.employeeId));
       setError(null);
     } catch {
-      setError('Backend nicht erreichbar. Bitte die API (apps/api) starten.');
+      setError('Backend nicht erreichbar. Bitte die API starten.');
     }
   }, []);
 
@@ -97,119 +100,87 @@ export function AbsencePanel() {
   );
 
   return (
-    <div className="space-y-6">
-      <Card>
-        <CardHeader>
-          <CardTitle>Abwesenheit beantragen</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Art</span>
-              <select
-                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                value={type}
-                onChange={(e) => setType(e.target.value as AbsenceType)}
-              >
+    <>
+      <PageHead
+        eyebrow="Self-Service · Abwesenheit"
+        title="Abwesenheiten"
+        sub="Urlaub, Krankheit und Sonderurlaub beantragen. Genehmigungen durch Vorgesetzte erzeugen ein revisionssicheres Audit-Ereignis."
+        right={<StatusPill tone="neutral">{requests.filter((r) => r.status === 'requested').length} offen</StatusPill>}
+      />
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[380px_1fr]">
+        <Card className="h-fit p-5">
+          <h2 className="text-base font-semibold">Antrag stellen</h2>
+          <div className="mt-4 space-y-3">
+            <Field label="Art">
+              <Select value={type} onChange={(e) => setType(e.target.value as AbsenceType)}>
                 <option value="vacation">Urlaub</option>
                 <option value="sick">Krankheit</option>
                 <option value="special">Sonderurlaub</option>
-              </select>
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Von</span>
-              <input
-                type="date"
-                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                value={from}
-                onChange={(e) => setFrom(e.target.value)}
-              />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span className="text-slate-600">Bis</span>
-              <input
-                type="date"
-                className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-                value={to}
-                onChange={(e) => setTo(e.target.value)}
-              />
-            </label>
+              </Select>
+            </Field>
+            <div className="grid grid-cols-2 gap-3">
+              <Field label="Von">
+                <TextInput type="date" value={from} onChange={(e) => setFrom(e.target.value)} />
+              </Field>
+              <Field label="Bis">
+                <TextInput type="date" value={to} onChange={(e) => setTo(e.target.value)} />
+              </Field>
+            </div>
+            <Field label="Begründung (optional)">
+              <TextInput value={reason} maxLength={500} onChange={(e) => setReason(e.target.value)} />
+            </Field>
+            <Button variant="primary" disabled={pending || !from || !to} onClick={() => void onSubmit()}>
+              Antrag stellen
+            </Button>
           </div>
-          <label className="block space-y-1 text-sm">
-            <span className="text-slate-600">Begründung (optional)</span>
-            <input
-              type="text"
-              className="w-full rounded-md border border-slate-300 px-2 py-1.5 text-sm"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              maxLength={500}
-            />
-          </label>
-          <Button disabled={pending || !from || !to} onClick={() => void onSubmit()}>
-            Antrag stellen
-          </Button>
-        </CardContent>
-      </Card>
+        </Card>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{canApprove ? 'Anträge (alle)' : 'Meine Anträge'}</CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          {requests.length === 0 ? (
-            <p className="text-sm text-slate-500">Keine Anträge vorhanden.</p>
-          ) : (
-            <ul className="space-y-2">
-              {requests.map((req) => (
-                <li
-                  key={req.id}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-slate-200 px-3 py-2 text-sm"
-                >
-                  <span className="flex items-center gap-2">
-                    <Badge variant={statusVariant(req.status)}>{STATUS_LABEL[req.status]}</Badge>
-                    <span className="text-slate-700">
-                      {TYPE_LABEL[req.type]} · {req.fromDate} – {req.toDate}
+        <div className="space-y-4">
+          <Worklist>
+            {requests.length === 0 ? (
+              <Empty>Keine Anträge vorhanden.</Empty>
+            ) : (
+              requests.map((req) => (
+                <Row key={req.id} className="cursor-default hover:bg-surface">
+                  <Avatar>{TYPE_LABEL[req.type].slice(0, 2)}</Avatar>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex items-center gap-2">
+                      <StatusPill tone={STATUS_TONE[req.status]}>{STATUS_LABEL[req.status]}</StatusPill>
+                      <span className="font-semibold">{TYPE_LABEL[req.type]}</span>
+                    </span>
+                    <span className="mono mt-1 block text-[12.5px] text-ink-faint">
+                      {req.fromDate} – {req.toDate}
                     </span>
                   </span>
                   <span className="flex gap-2">
                     {canApprove && req.status === 'requested' && (
                       <>
-                        <Button
-                          variant="outline"
-                          className="h-7 px-2 text-xs"
-                          disabled={pending}
-                          onClick={() => void onDecide(req.id, 'approve')}
-                        >
+                        <Button size="sm" disabled={pending} onClick={() => void onDecide(req.id, 'approve')}>
                           Genehmigen
                         </Button>
-                        <Button
-                          variant="outline"
-                          className="h-7 px-2 text-xs"
-                          disabled={pending}
-                          onClick={() => void onDecide(req.id, 'reject')}
-                        >
+                        <Button size="sm" variant="danger" disabled={pending} onClick={() => void onDecide(req.id, 'reject')}>
                           Ablehnen
                         </Button>
                       </>
                     )}
                     {(req.status === 'requested' || req.status === 'approved') && (
-                      <Button
-                        variant="outline"
-                        className="h-7 px-2 text-xs"
-                        disabled={pending}
-                        onClick={() => void onDecide(req.id, 'cancel')}
-                      >
+                      <Button size="sm" variant="ghost" disabled={pending} onClick={() => void onDecide(req.id, 'cancel')}>
                         Stornieren
                       </Button>
                     )}
                   </span>
-                </li>
-              ))}
-            </ul>
-          )}
-          {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
-        </CardContent>
-      </Card>
-    </div>
+                </Row>
+              ))
+            )}
+          </Worklist>
+          {error && <ErrorNote>{error}</ErrorNote>}
+          <MessageStrip tone="info">
+            Ein genehmigter oder abgelehnter Antrag ist nachvollziehbar protokolliert. Stornierungen sind für eigene bzw.
+            vorgesetzte Rollen möglich.
+          </MessageStrip>
+        </div>
+      </div>
+    </>
   );
 }
