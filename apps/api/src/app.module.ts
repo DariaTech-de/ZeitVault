@@ -3,6 +3,7 @@ import { AbsenceModule } from './absence/absence.module';
 import { AccountsModule } from './accounts/accounts.module';
 import { AdminModule } from './admin/admin.module';
 import { AuditModule } from './audit/audit.module';
+import { CorrectionModule } from './correction/correction.module';
 import { TenantModule } from './common/tenant.module';
 import { DbModule } from './db/db.module';
 import { EauModule } from './eau/eau.module';
@@ -40,6 +41,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     ProjectModule,
     EauModule,
     MeModule,
+    CorrectionModule,
   ],
 })
 export class AppModule {}

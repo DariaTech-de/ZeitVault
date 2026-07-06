@@ -138,25 +138,35 @@ export function Worklist({ children, className }: { children: ReactNode; classNa
     </div>
   );
 }
+const rowBase =
+  'flex w-full items-center gap-3 border-b border-l-[3px] border-line border-l-transparent px-4 py-3 text-left transition last:border-b-0';
+
+/**
+ * Listenzeile. Ist ein onClick (oder `interactive`) gesetzt, wird eine
+ * fokussierbare `<button>`-Zeile gerendert (Master-Detail-Auswahl); sonst eine
+ * statische `<div>`-Zeile, die selbst Buttons enthalten darf (kein verschachteltes
+ * `<button>`, das sonst einen Hydration-Fehler ausloest).
+ */
 export function Row({
   selected,
   className,
   children,
+  interactive,
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { selected?: boolean }) {
+}: HTMLAttributes<HTMLElement> & { selected?: boolean; interactive?: boolean }) {
+  const isInteractive = interactive ?? props.onClick !== undefined;
+  const cls = cn(rowBase, selected ? 'border-l-primary bg-primary-weak' : isInteractive && 'hover:bg-surface-2', className);
+  if (isInteractive) {
+    return (
+      <button type="button" aria-selected={selected} className={cls} {...(props as ButtonHTMLAttributes<HTMLButtonElement>)}>
+        {children}
+      </button>
+    );
+  }
   return (
-    <button
-      type="button"
-      aria-selected={selected}
-      className={cn(
-        'flex w-full items-center gap-3 border-b border-l-[3px] border-line border-l-transparent px-4 py-3 text-left transition last:border-b-0',
-        selected ? 'border-l-primary bg-primary-weak' : 'hover:bg-surface-2',
-        className,
-      )}
-      {...props}
-    >
+    <div aria-selected={selected} className={cls} {...props}>
       {children}
-    </button>
+    </div>
   );
 }
 export function Avatar({ children }: { children: ReactNode }) {

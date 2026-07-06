@@ -178,6 +178,45 @@ export function postAccountTransaction(
   });
 }
 
+export type CorrectionKind = 'add' | 'correct';
+export type CorrectionStatus = 'requested' | 'approved' | 'rejected';
+
+export interface CorrectionRequest {
+  id: string;
+  employeeId: string;
+  kind: CorrectionKind;
+  targetEventId: string | null;
+  proposedKind: string;
+  proposedOccurredAt: string;
+  reason: string;
+  status: CorrectionStatus;
+  note: string | null;
+  createdAt: string;
+}
+
+export function fetchCorrections(identity: Identity, employeeId?: string): Promise<CorrectionRequest[]> {
+  const q = employeeId ? `?employeeId=${encodeURIComponent(employeeId)}` : '';
+  return request(identity, `/api/corrections${q}`);
+}
+
+export function createCorrectionRequest(
+  identity: Identity,
+  input: { employeeId: string; proposedKind: string; proposedOccurredAt: string; reason: string },
+): Promise<CorrectionRequest> {
+  return request(identity, '/api/corrections', {
+    method: 'POST',
+    body: JSON.stringify({ ...input, kind: 'add' }),
+  });
+}
+
+export function decideCorrection(
+  identity: Identity,
+  id: string,
+  action: 'approve' | 'reject',
+): Promise<CorrectionRequest> {
+  return request(identity, `/api/corrections/${id}/${action}`, { method: 'POST' });
+}
+
 export interface ViolationEntry {
   employeeId: string;
   displayName: string;

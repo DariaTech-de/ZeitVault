@@ -289,6 +289,39 @@ export const accountTransactions = pgTable(
 export type AccountTransactionRow = typeof accountTransactions.$inferSelect;
 export type NewAccountTransactionRow = typeof accountTransactions.$inferInsert;
 
+export const correctionKind = pgEnum('correction_kind', ['add', 'correct']);
+export const correctionStatus = pgEnum('correction_status', ['requested', 'approved', 'rejected']);
+
+/**
+ * Anpassungsanträge ("Stempel vergessen"): Mitarbeitende beantragen das
+ * Nachtragen/Korrigieren einer Stempelung. Workflow-Entität (Statuswechsel).
+ * Erst die Freigabe erzeugt den append-only Stempel (siehe migrations/0014).
+ */
+export const stampCorrectionRequests = pgTable(
+  'stamp_correction_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    kind: correctionKind('kind').notNull(),
+    targetEventId: uuid('target_event_id'),
+    proposedKind: stampKind('proposed_kind').notNull(),
+    proposedOccurredAt: timestamp('proposed_occurred_at', { withTimezone: true }).notNull(),
+    reason: text('reason').notNull(),
+    status: correctionStatus('status').notNull().default('requested'),
+    approverId: varchar('approver_id', { length: 128 }),
+    appliedEventId: uuid('applied_event_id'),
+    note: text('note'),
+    decidedAt: timestamp('decided_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('correction_requests_tenant_idx').on(t.tenantId),
+    index('correction_requests_employee_idx').on(t.employeeId),
+  ],
+);
+export type StampCorrectionRequestRow = typeof stampCorrectionRequests.$inferSelect;
+
 /** Versionierte Arbeitszeitmodelle (Sollzeit je Wochentag in Minuten). */
 export const workTimeModels = pgTable(
   'work_time_models',
