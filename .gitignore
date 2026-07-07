@@ -27,7 +27,11 @@ coverage/
 .env
 .env.*
 !.env.example
+!.env.prod.example
 *.local
+
+# Aus dem Template erzeugte Keycloak-Realm-Datei (enthaelt die Domain) - nicht versionieren.
+infra/docker/keycloak-prod/import/*.json
 *.pem
 *.key
 *.p12

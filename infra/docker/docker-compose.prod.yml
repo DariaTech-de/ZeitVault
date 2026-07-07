@@ -1,0 +1,146 @@
+# ZeitVault - Produktions-Stack (Self-Hosted, HTTPS) fuer einen Host/LXC.
+# Nur Caddy veroeffentlicht Ports (80/443); alle anderen Dienste sind intern.
+# Konfiguration/Secrets kommen aus der .env (siehe .env.prod.example).
+# Image-Tags in echter Produktion zusaetzlich per Digest pinnen (ADR-0003).
+name: zeitvault
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zeitvault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}
+      POSTGRES_DB: zeitvault
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Legt beim ERSTEN Start die Ledger- und die Keycloak-Datenbank an.
+      - ./postgres-init-prod:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U zeitvault']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Einmalige Migrationen (API- und Ledger-DB) vor dem Start der Dienste.
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+      target: build
+    restart: 'no'
+    environment:
+      API_DB: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault
+      LEDGER_DB: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault_ledger
+    command:
+      - sh
+      - -c
+      - >
+        cd /repo &&
+        DATABASE_URL=$$API_DB pnpm --filter @zeitvault/api db:migrate &&
+        DATABASE_URL=$$LEDGER_DB pnpm --filter @zeitvault/ledger db:migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ['start', '--import-realm']
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: zeitvault
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Hinter dem Reverse-Proxy: oeffentliche URL + X-Forwarded-Header vertrauen.
+      KC_HOSTNAME: https://${AUTH_DOMAIN}
+      KC_HTTP_ENABLED: 'true'
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: 'true'
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD fehlt}
+    volumes:
+      # Enthaelt die aus dem Template erzeugte Realm-Datei (siehe Runbook).
+      - ./keycloak-prod/import:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ledger:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.ledger
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault_ledger
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault
+      LEDGER_URL: http://ledger:3001
+      AUTH_MODE: oidc
+      KEYCLOAK_ISSUER_URL: https://${AUTH_DOMAIN}/realms/zeitvault
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-account}
+      CORS_ORIGINS: https://${APP_DOMAIN}
+      OPERATION_MODE: self_hosted
+      # Optional: oeffentlicher Ed25519-Lizenzschluessel (leer = Testmodus).
+      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
+      LICENSE_GRACE_SEATS: ${LICENSE_GRACE_SEATS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        # Same-origin: leere API-Base -> Aufrufe an /api werden vom Proxy geroutet.
+        NEXT_PUBLIC_API_BASE_URL: ''
+        NEXT_PUBLIC_AUTH_MODE: 'oidc'
+        NEXT_PUBLIC_TENANT_ID: 'default'
+        NEXT_PUBLIC_OIDC_AUTHORITY: 'https://${AUTH_DOMAIN}/realms/zeitvault'
+        NEXT_PUBLIC_OIDC_CLIENT_ID: 'zeitvault-web'
+        NEXT_PUBLIC_OIDC_REDIRECT_URI: 'https://${APP_DOMAIN}/auth/callback'
+        NEXT_PUBLIC_OIDC_POST_LOGOUT_URI: 'https://${APP_DOMAIN}/'
+        NEXT_PUBLIC_OIDC_SCOPE: 'openid'
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+      - '443:443'
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?APP_DOMAIN fehlt}
+      AUTH_DOMAIN: ${AUTH_DOMAIN:?AUTH_DOMAIN fehlt}
+      ACME_EMAIL: ${ACME_EMAIL:?ACME_EMAIL fehlt}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - web
+      - api
+      - keycloak
+
+volumes:
+  pgdata:
+  caddydata:
+  caddyconfig:

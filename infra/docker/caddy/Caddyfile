@@ -1,0 +1,29 @@
+# ZeitVault Reverse-Proxy (Caddy) - automatisches HTTPS (Let's Encrypt).
+# Domains und ACME-E-Mail kommen aus der .env (docker-compose.prod.yml).
+# Voraussetzung: oeffentliche DNS-A/AAAA-Records auf diesen Host, Ports 80+443
+# erreichbar.
+
+{
+	email {$ACME_EMAIL}
+}
+
+# Anwendung: Web-Oberflaeche + API same-origin unter /api (kein CORS noetig).
+{$APP_DOMAIN} {
+	encode zstd gzip
+
+	# API-Aufrufe an den API-Container (Pfad /api/... bleibt erhalten).
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	# Alles Uebrige an die Next.js-Web-App.
+	handle {
+		reverse_proxy web:3000
+	}
+}
+
+# Identity-Provider (Keycloak) auf eigener Subdomain.
+{$AUTH_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy keycloak:8080
+}

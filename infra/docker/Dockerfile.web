@@ -1,0 +1,48 @@
+# ZeitVault Web (Next.js) - Mehrstufiger Build, Standalone-Output.
+# Build-Kontext ist das Repo-Root (../..). Basis-Image in Produktion per Digest
+# pinnen (ADR-0003).
+#
+# NEXT_PUBLIC_*-Werte werden zur BUILD-Zeit eingebacken (Next.js). Sie kommen als
+# Build-Args aus dem docker-compose.prod.yml (bzw. der .env). API-Aufrufe laufen
+# same-origin ueber /api (leere API-Base) und werden vom Reverse-Proxy an den
+# API-Container geroutet - kein CORS noetig.
+
+FROM node:24-bookworm-slim AS build
+RUN corepack enable
+WORKDIR /repo
+COPY . .
+RUN pnpm install --frozen-lockfile
+
+# Oeffentliche (client-seitige) Konfiguration - zur Build-Zeit gesetzt.
+ARG NEXT_PUBLIC_API_BASE_URL=""
+ARG NEXT_PUBLIC_AUTH_MODE="oidc"
+ARG NEXT_PUBLIC_TENANT_ID="default"
+ARG NEXT_PUBLIC_OIDC_AUTHORITY=""
+ARG NEXT_PUBLIC_OIDC_CLIENT_ID="zeitvault-web"
+ARG NEXT_PUBLIC_OIDC_REDIRECT_URI=""
+ARG NEXT_PUBLIC_OIDC_POST_LOGOUT_URI=""
+ARG NEXT_PUBLIC_OIDC_SCOPE="openid"
+ENV NEXT_PUBLIC_API_BASE_URL=$NEXT_PUBLIC_API_BASE_URL \
+    NEXT_PUBLIC_AUTH_MODE=$NEXT_PUBLIC_AUTH_MODE \
+    NEXT_PUBLIC_TENANT_ID=$NEXT_PUBLIC_TENANT_ID \
+    NEXT_PUBLIC_OIDC_AUTHORITY=$NEXT_PUBLIC_OIDC_AUTHORITY \
+    NEXT_PUBLIC_OIDC_CLIENT_ID=$NEXT_PUBLIC_OIDC_CLIENT_ID \
+    NEXT_PUBLIC_OIDC_REDIRECT_URI=$NEXT_PUBLIC_OIDC_REDIRECT_URI \
+    NEXT_PUBLIC_OIDC_POST_LOGOUT_URI=$NEXT_PUBLIC_OIDC_POST_LOGOUT_URI \
+    NEXT_PUBLIC_OIDC_SCOPE=$NEXT_PUBLIC_OIDC_SCOPE \
+    NEXT_TELEMETRY_DISABLED=1
+
+RUN pnpm --filter @zeitvault/web build
+
+FROM node:24-bookworm-slim AS runtime
+ENV NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT=3000 \
+    HOSTNAME=0.0.0.0
+WORKDIR /app
+# Standalone-Server + statische Assets (Monorepo-Layout: apps/web/...).
+COPY --from=build /repo/apps/web/.next/standalone ./
+COPY --from=build /repo/apps/web/.next/static ./apps/web/.next/static
+EXPOSE 3000
+USER node
+CMD ["node", "apps/web/server.js"]
