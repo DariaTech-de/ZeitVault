@@ -271,3 +271,69 @@ Nicht Teil des Kern-Stacks, bei Bedarf ergänzbar (aus
 - **Datensicherung** regelmäßig testen (Restore-Probe).
 
 > Rechtlicher Hinweis: Diese Anleitung ersetzt keine Rechts-/IT-Sicherheitsberatung.
+
+---
+
+## 12. Schnelltest ohne Domain (per IP, HTTP)
+
+Für einen schnellen Funktionstest ohne öffentliche Domain/DNS gibt es einen
+eigenständigen Stack, der **per IP über HTTP (Port 80)** erreichbar ist. Alle
+Dienste liegen dabei auf **einem Ursprung** (same-origin): Web unter `/`, API
+unter `/api`, Keycloak unter `/idp`.
+
+> **Grenzen des IP-Tests:** Kein TLS (unverschlüsselt), daher funktioniert
+> **Passkey/WebAuthn nicht** (setzt einen sicheren Kontext voraus). Nur für
+> lokale Tests im vertrauenswürdigen Netz. Für Produktion die domainbasierte
+> Variante mit HTTPS aus Abschnitt 4–8 verwenden.
+
+**a) IP eintragen** – in der `.env` die erreichbare IP (oder LAN-Hostname) ohne
+Schema setzen:
+
+```bash
+cd /opt/zeitvault/infra/docker
+# eigene IP herausfinden (Beispiel):
+hostname -I | awk '{print $1}'
+# in die .env aufnehmen (Beispielwert ersetzen):
+grep -v '^APP_IP=' .env > .env.tmp && echo "APP_IP=192.168.1.50" >> .env.tmp && mv .env.tmp .env
+```
+
+**b) Realm aus dem IP-Template erzeugen** (HTTP-Origins, `sslRequired: none`):
+
+```bash
+set -a && . ./.env && set +a
+sed "s#\${APP_IP}#${APP_IP}#g" \
+  keycloak-prod/zeitvault-realm.ip.template.json \
+  > keycloak-prod/import/zeitvault-realm.json
+python3 -c "import json;json.load(open('keycloak-prod/import/zeitvault-realm.json'));print('Realm OK')"
+```
+
+**c) Domain-Stack stoppen** (falls er läuft – beide belegen Port 80):
+
+```bash
+docker compose -f docker-compose.prod.yml down
+```
+
+**d) IP-Stack bauen und starten** (getrennter Projektname `zeitvault-ip`, eigene
+Volumes):
+
+```bash
+docker compose -f docker-compose.ip.yml up -d --build
+docker compose -f docker-compose.ip.yml ps
+docker compose -f docker-compose.ip.yml logs migrate-api migrate-ledger
+```
+
+Danach erreichbar (IP durch euren Wert ersetzen):
+- **App:** `http://192.168.1.50/`
+- **API:** `http://192.168.1.50/api/info`
+- **Keycloak-Admin:** `http://192.168.1.50/idp/` (Login `KEYCLOAK_ADMIN` /
+  `KEYCLOAK_ADMIN_PASSWORD`)
+
+Die Ersteinrichtung (Admin-Nutzer, Mitarbeitende verknüpfen) läuft wie in
+Abschnitt 7 – nur mit `http://<IP>` statt `https://APP_DOMAIN` und
+`http://<IP>/idp` als Keycloak-Basis. Zum Zurückwechseln auf HTTPS/Domain:
+`docker compose -f docker-compose.ip.yml down` und den Domain-Stack aus
+Abschnitt 6 starten.
+
+> Hinweis: Wird die IP später geändert, muss das Web-Image neu gebaut werden
+> (`--build`), da die Keycloak-Authority zur Build-Zeit eingebacken wird; der
+> Realm ist erneut aus dem Template zu erzeugen.
