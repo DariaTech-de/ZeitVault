@@ -47,6 +47,7 @@ export function ShellBar() {
     { href: '/admin', label: 'Verwaltung', show: isManager },
     { href: '/admin/auswertungen', label: 'Auswertungen', show: isManager },
     { href: '/admin/standort', label: 'Standort', show: isManager },
+    { href: '/admin/terminals', label: 'Terminals', show: isManager },
     { href: '/admin/lizenz', label: 'Lizenz', show: isManager },
     { href: '/hilfe', label: 'Hilfe', show: true },
   ];

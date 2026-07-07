@@ -8,5 +8,6 @@ import { StampingService } from './stamping.service';
   imports: [AuditModule, GeofenceModule],
   controllers: [StampingController],
   providers: [StampingService],
+  exports: [StampingService],
 })
 export class StampingModule {}

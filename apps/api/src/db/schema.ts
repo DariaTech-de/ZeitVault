@@ -159,6 +159,43 @@ export const geofenceSites = pgTable(
 );
 export type GeofenceSiteRow = typeof geofenceSites.$inferSelect;
 
+/**
+ * Zeiterfassungs-Terminal. Authentifiziert sich mit einem Geräte-Token; nur der
+ * Hash wird gespeichert. Keine biometrischen Daten am Server (ADR-0015).
+ */
+export const terminals = pgTable(
+  'terminals',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    tokenHash: varchar('token_hash', { length: 128 }).notNull(),
+    active: boolean('active').notNull().default(true),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('terminals_tenant_idx').on(t.tenantId), index('terminals_token_idx').on(t.tenantId, t.tokenHash)],
+);
+export type TerminalRow = typeof terminals.$inferSelect;
+
+/** NFC-Chip -> Mitarbeitender (UID je Mandant eindeutig). */
+export const nfcCredentials = pgTable(
+  'nfc_credentials',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    uid: varchar('uid', { length: 128 }).notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('nfc_credentials_tenant_uid_uq').on(t.tenantId, t.uid),
+    index('nfc_credentials_tenant_idx').on(t.tenantId),
+  ],
+);
+export type NfcCredentialRow = typeof nfcCredentials.$inferSelect;
+
 /** Admin-Kennzeichnung eines Stempels („blinken"); getrennte Workflow-Entität. */
 export const stampFlags = pgTable(
   'stamp_flags',

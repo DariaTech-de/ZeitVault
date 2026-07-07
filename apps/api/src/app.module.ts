@@ -17,6 +17,7 @@ import { ProjectModule } from './project/project.module';
 import { ReportingModule } from './reporting/reporting.module';
 import { RetentionModule } from './retention/retention.module';
 import { StampingModule } from './stamping/stamping.module';
+import { TerminalModule } from './terminal/terminal.module';
 import { TimeModule } from './time/time.module';
 import { WorkTimeModule } from './work-time/work-time.module';
 
@@ -46,6 +47,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     CorrectionModule,
     LicensingModule,
     GeofenceModule,
+    TerminalModule,
   ],
 })
 export class AppModule {}

@@ -1,7 +1,6 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
-import { AuthGate } from '@/components/auth-gate';
-import { ShellBar } from '@/components/fiori/shell-bar';
+import { AppChrome } from '@/components/app-chrome';
 import { ThemeScript } from '@/components/fiori/theme-script';
 import { AuthProvider } from '@/lib/auth';
 import './globals.css';
@@ -19,8 +18,7 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       </head>
       <body className="min-h-screen bg-bg text-ink antialiased">
         <AuthProvider>
-          <ShellBar />
-          <AuthGate>{children}</AuthGate>
+          <AppChrome>{children}</AppChrome>
         </AuthProvider>
       </body>
     </html>

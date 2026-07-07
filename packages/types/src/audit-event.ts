@@ -30,6 +30,8 @@ export const auditActionSchema = z.enum([
   'license.activate',
   'geofence.configure',
   'stamp.flag',
+  'terminal.register',
+  'nfc.map',
 ]);
 export type AuditAction = z.infer<typeof auditActionSchema>;
 

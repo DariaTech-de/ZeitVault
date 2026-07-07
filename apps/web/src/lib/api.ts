@@ -307,6 +307,67 @@ export function flagStamp(
   return request(identity, '/api/geofence/flags', { method: 'POST', body: JSON.stringify(input) });
 }
 
+export interface TerminalSummary {
+  id: string;
+  name: string;
+  active: boolean;
+  lastSeenAt: string | null;
+  createdAt: string;
+}
+
+export interface NfcMapping {
+  uid: string;
+  employeeId: string;
+  employeeName: string | null;
+  active: boolean;
+}
+
+export function registerTerminal(identity: Identity, name: string): Promise<{ id: string; name: string; token: string }> {
+  return request(identity, '/api/terminal/devices', { method: 'POST', body: JSON.stringify({ name }) });
+}
+
+export function fetchTerminals(identity: Identity): Promise<TerminalSummary[]> {
+  return request(identity, '/api/terminal/devices');
+}
+
+export function deactivateTerminal(identity: Identity, id: string): Promise<{ ok: true }> {
+  return request(identity, `/api/terminal/devices/${id}`, { method: 'DELETE' });
+}
+
+export function fetchNfcMappings(identity: Identity): Promise<NfcMapping[]> {
+  return request(identity, '/api/terminal/nfc');
+}
+
+export function mapNfc(identity: Identity, input: { uid: string; employeeId: string }): Promise<{ ok: true }> {
+  return request(identity, '/api/terminal/nfc', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export interface TerminalStampResult {
+  employeeName: string;
+  personnelNumber: string;
+  kind: string;
+  state: 'out' | 'in' | 'break';
+  occurredAt: string;
+}
+
+/** Kiosk-Stempel am Terminal (Geräte-Token statt Nutzer-Login). */
+export async function kioskStamp(
+  deviceToken: string,
+  input: { nfcUid?: string; employeeId?: string; kind?: string },
+): Promise<TerminalStampResult> {
+  const res = await fetch(`${API_BASE}/api/kiosk/stamp`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-terminal-token': deviceToken },
+    body: JSON.stringify(input),
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    const detail = await res.text();
+    throw new Error(`HTTP ${res.status}: ${detail}`);
+  }
+  return res.json() as Promise<TerminalStampResult>;
+}
+
 export interface ViolationEntry {
   employeeId: string;
   displayName: string;

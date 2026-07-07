@@ -162,6 +162,22 @@ const TOPICS: Topic[] = [
     },
   },
   {
+    id: 'terminals',
+    title: 'Terminals (NFC/Fingerabdruck)',
+    roles: ['manager', 'admin'],
+    intro:
+      'Am Eingang kann ein Terminal aufgestellt werden, an dem per NFC-Chip oder Fingerabdruck gestempelt wird. Der Fingerabdruck wird nur lokal am Terminal abgeglichen – der Server erhält keine biometrischen Daten (DSGVO Art. 9).',
+    steps: [
+      'Terminal registrieren (Admin): unter „Terminals" ein Gerät anlegen; das Geräte-Token wird nur einmal angezeigt und im Terminal hinterlegt.',
+      'NFC-Chip zuordnen (Admin): die NFC-UID einem Mitarbeitenden zuordnen.',
+      'Kiosk-Ansicht /kiosk: das Terminal meldet sich mit dem Geräte-Token an (ohne Nutzer-Login); ein Chip löst automatisch Kommen/Gehen aus.',
+    ],
+    note: {
+      tone: 'info',
+      text: 'Terminal-Stempel sind append-only und revisionssicher wie alle anderen. Das Geräte-Token wird nur als Hash gespeichert.',
+    },
+  },
+  {
     id: 'sicherheit',
     title: 'Sicherheit',
     roles: ['manager', 'admin'],

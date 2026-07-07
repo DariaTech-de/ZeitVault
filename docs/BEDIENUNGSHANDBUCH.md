@@ -387,6 +387,28 @@ befinden.
 > Aktivierung und Kennzeichnung werden revisionssicher protokolliert. Details:
 > [`adr/0014-standort-pruefung-geofence-opt-in.md`](adr/0014-standort-pruefung-geofence-opt-in.md).
 
+### 13.3 Terminals (NFC-Chip / Fingerabdruck)
+
+Menüpunkt **„Terminals"** (nur Vorgesetzte/Admins). Am Eingang kann ein Terminal
+aufgestellt werden, an dem Mitarbeitende per **NFC-Chip** oder **Fingerabdruck**
+stempeln.
+
+- **Keine Biometrie am Server:** Der Fingerabdruck wird ausschließlich **lokal am
+  Terminal** abgeglichen (Secure Element). Der Server erhält niemals
+  biometrische Daten (DSGVO Art. 9), sondern nur die aufgelöste Mitarbeiter-ID.
+- **Terminal registrieren (Admin):** Unter „Terminals" ein Gerät anlegen. Das
+  **Geräte-Token** wird aus Sicherheitsgründen **nur einmal** angezeigt – sicher
+  im Terminal hinterlegen.
+- **NFC-Chip zuordnen (Admin):** Die NFC-UID eines Chips einem Mitarbeitenden
+  zuordnen.
+- **Kiosk-Ansicht:** Das Terminal öffnet die Ansicht unter `/kiosk` und meldet
+  sich mit dem Geräte-Token an – **ohne Nutzer-Login**. Ein Chip/Fingerabdruck
+  löst automatisch die nächste sinnvolle Aktion aus (Kommen/Gehen).
+
+> Terminal-Stempel sind wie alle Stempel append-only und revisionssicher
+> protokolliert. Details:
+> [`adr/0015-terminal-nfc-fingerprint.md`](adr/0015-terminal-nfc-fingerprint.md).
+
 ---
 
 ## 14. Häufige Aufgaben (Schritt für Schritt)
