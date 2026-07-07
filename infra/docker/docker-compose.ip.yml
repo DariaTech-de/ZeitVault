@@ -1,0 +1,166 @@
+# ZeitVault - Schnelltest OHNE Domain: Zugriff per IP ueber HTTP (Port 80).
+# Eigenstaendiger Stack (getrennter Projektname `zeitvault-ip`, eigene Volumes),
+# damit er den domainbasierten Produktions-Stack nicht stoert.
+#
+# Merkmale:
+#  - Kein TLS/kein Zertifikat. NUR fuer lokale Tests im vertrauenswuerdigen Netz.
+#  - Passkey/WebAuthn funktioniert NICHT (unsicherer Kontext ohne HTTPS).
+#  - Same-origin: Web unter /, API unter /api, Keycloak unter /idp (ein Ursprung).
+#
+# Voraussetzung in der .env: POSTGRES_PASSWORD, KEYCLOAK_ADMIN_PASSWORD und
+# APP_IP (die IP/der Hostname, unter dem der Host erreichbar ist, ohne Schema).
+# Nur Port 80 wird veroeffentlicht.
+name: zeitvault-ip
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zeitvault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}
+      POSTGRES_DB: zeitvault
+    volumes:
+      # PostgreSQL 18: Volume am Elternverzeichnis mounten (versionsspezifisches
+      # Unterverzeichnis), NICHT an /var/lib/postgresql/data.
+      - pgdata:/var/lib/postgresql
+      # Legt beim ERSTEN Start die Ledger- und die Keycloak-Datenbank an.
+      - ./postgres-init-prod:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U zeitvault']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  # Einmalige Migrationen als getrennte One-Shot-Dienste (wie im Produktions-Stack).
+  migrate-api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+      target: build
+    restart: 'no'
+    working_dir: /repo
+    environment:
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault
+    command: ['pnpm', '--filter', '@zeitvault/api', 'db:migrate']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate-ledger:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+      target: build
+    restart: 'no'
+    working_dir: /repo
+    environment:
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault_ledger
+    command: ['pnpm', '--filter', '@zeitvault/ledger', 'db:migrate']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ['start', '--import-realm']
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: zeitvault
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Oeffentliche Basis-URL (HTTP, per IP) + relativer Pfad /idp. Ergibt den
+      # Issuer http://<APP_IP>/idp/realms/zeitvault. Caddy reicht /idp/* unveraendert
+      # an Keycloak durch (kein Path-Stripping noetig).
+      KC_HOSTNAME: http://${APP_IP}
+      KC_HTTP_RELATIVE_PATH: /idp
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HTTP_ENABLED: 'true'
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: 'true'
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD fehlt}
+    volumes:
+      # Enthaelt die aus dem IP-Template erzeugte Realm-Datei (siehe Runbook).
+      - ./keycloak-prod/import:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ledger:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.ledger
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault_ledger
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-ledger:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault
+      LEDGER_URL: http://ledger:3001
+      AUTH_MODE: oidc
+      # Issuer = oeffentliche URL (fuer die iss-Pruefung), JWKS aber INTERN abrufen
+      # (kein Loopback ueber den Proxy noetig).
+      KEYCLOAK_ISSUER_URL: http://${APP_IP}/idp/realms/zeitvault
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/idp/realms/zeitvault/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-account}
+      CORS_ORIGINS: http://${APP_IP}
+      OPERATION_MODE: self_hosted
+      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
+      LICENSE_GRACE_SEATS: ${LICENSE_GRACE_SEATS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-api:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        # Same-origin: leere API-Base -> Aufrufe an /api werden vom Proxy geroutet.
+        NEXT_PUBLIC_API_BASE_URL: ''
+        NEXT_PUBLIC_AUTH_MODE: 'oidc'
+        NEXT_PUBLIC_TENANT_ID: 'default'
+        # Nur die Authority muss eingebacken werden (absolute URL zu Keycloak /idp).
+        # Redirect-/Logout-URI leiten sich zur Laufzeit aus window.location.origin
+        # ab (http://<APP_IP>), muessen also NICHT gesetzt werden.
+        NEXT_PUBLIC_OIDC_AUTHORITY: 'http://${APP_IP}/idp/realms/zeitvault'
+        NEXT_PUBLIC_OIDC_CLIENT_ID: 'zeitvault-web'
+        NEXT_PUBLIC_OIDC_SCOPE: 'openid'
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - '80:80'
+    volumes:
+      - ./caddy/Caddyfile.ip:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - web
+      - api
+      - keycloak
+
+volumes:
+  pgdata:
+  caddydata:
+  caddyconfig:

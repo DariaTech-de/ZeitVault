@@ -20,6 +20,11 @@ export const envSchema = z.object({
   AUTH_MODE: z.enum(['oidc', 'dev']).default('oidc'),
   KEYCLOAK_ISSUER_URL: z.string().url().optional(),
   KEYCLOAK_AUDIENCE: z.string().optional(),
+  // Optionaler, separater JWKS-Endpunkt. Ohne Wert wird er aus
+  // KEYCLOAK_ISSUER_URL abgeleitet (`.../protocol/openid-connect/certs`). Nuetzlich,
+  // wenn die Schluessel intern (z. B. http://keycloak:8080/...) abgerufen werden
+  // sollen, waehrend der Issuer die oeffentliche URL bleibt (Reverse-Proxy).
+  KEYCLOAK_JWKS_URI: z.string().url().optional(),
   TENANT_CLAIM: z.string().default('tenant_id'),
   DEFAULT_TENANT_ID: z.string().default('default'),
   // Betriebsmodell (eine Codebasis, zwei Modelle; ADR-0010): 'self_hosted' oder

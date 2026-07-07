@@ -31,7 +31,12 @@ export class TokenVerifier {
       throw new Error('KEYCLOAK_ISSUER_URL ist nicht konfiguriert (AUTH_MODE=oidc).');
     }
     const issuer = env.KEYCLOAK_ISSUER_URL.replace(/\/$/, '');
-    const jwksUri = `${issuer}/protocol/openid-connect/certs`;
+    // JWKS bevorzugt vom (optional) konfigurierten Endpunkt abrufen, sonst aus dem
+    // Issuer ableiten. So kann der Abruf intern erfolgen (z. B. hinter einem
+    // Reverse-Proxy), waehrend der Issuer-Claim gegen die oeffentliche URL geprueft
+    // wird.
+    const jwksUri =
+      env.KEYCLOAK_JWKS_URI ?? `${issuer}/protocol/openid-connect/certs`;
     const getKey = this.signingKeyResolver(jwksUri);
 
     return new Promise<JwtPayload>((resolve, reject) => {

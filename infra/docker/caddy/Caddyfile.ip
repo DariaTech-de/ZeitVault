@@ -1,0 +1,36 @@
+# ZeitVault Schnelltest OHNE Domain: Zugriff per IP ueber HTTP (Port 80).
+# Pfadbasiertes Routing auf EINEM Ursprung (same-origin) - dadurch kein CORS und
+# kein Mixed-Content-Problem zwischen Web-App und Keycloak:
+#   /        -> Next.js-Web-App
+#   /api/*   -> NestJS-API
+#   /idp/*   -> Keycloak (laeuft unter KC_HTTP_RELATIVE_PATH=/idp)
+#
+# ACHTUNG: Kein TLS. Passkey/WebAuthn funktioniert hier NICHT (unsicherer Kontext),
+# und der Verkehr ist unverschluesselt. Ausschliesslich fuer lokale Tests im
+# vertrauenswuerdigen Netz. Fuer Produktion die domainbasierte Caddyfile mit HTTPS
+# verwenden (siehe docker-compose.prod.yml).
+
+{
+	# Kein automatisches HTTPS/ACME - wir betreiben bewusst nur HTTP.
+	auto_https off
+}
+
+# Antwortet auf jeden Host/jede IP auf Port 80.
+:80 {
+	encode zstd gzip
+
+	# API-Aufrufe an den API-Container (Pfad /api/... bleibt erhalten).
+	handle /api/* {
+		reverse_proxy api:3000
+	}
+
+	# Identity-Provider (Keycloak) unter /idp (relativer Pfad in Keycloak gesetzt).
+	handle /idp/* {
+		reverse_proxy keycloak:8080
+	}
+
+	# Alles Uebrige an die Next.js-Web-App.
+	handle {
+		reverse_proxy web:3000
+	}
+}
