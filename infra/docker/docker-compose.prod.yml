@@ -13,7 +13,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}
       POSTGRES_DB: zeitvault
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # PostgreSQL 18: Volume am Elternverzeichnis mounten (versionsspezifisches
+      # Unterverzeichnis), NICHT an /var/lib/postgresql/data.
+      - pgdata:/var/lib/postgresql
       # Legt beim ERSTEN Start die Ledger- und die Keycloak-Datenbank an.
       - ./postgres-init-prod:/docker-entrypoint-initdb.d:ro
     healthcheck:
