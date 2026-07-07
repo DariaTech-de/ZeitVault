@@ -133,3 +133,7 @@
 @keyframes zvBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
 .zv-blink { animation: zvBlink 1.1s ease-in-out infinite; }
 @media (prefers-reduced-motion: reduce) { .zv-blink { animation: none; } }
+
+/* Horizontal scrollbarer Container ohne sichtbare Scrollleiste (z. B. Navigationsleiste). */
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.no-scrollbar::-webkit-scrollbar { display: none; }
