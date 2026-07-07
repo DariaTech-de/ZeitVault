@@ -25,22 +25,32 @@ services:
       retries: 10
 
   # Einmalige Migrationen (API- und Ledger-DB) vor dem Start der Dienste.
-  migrate:
+  # Einmalige Migrationen als getrennte One-Shot-Dienste. DATABASE_URL wird DIREKT
+  # gesetzt (von Compose substituiert) - keine Shell-Indirektion, keine $$-Fallen.
+  migrate-api:
     build:
       context: ../..
       dockerfile: infra/docker/Dockerfile.api
       target: build
     restart: 'no'
+    working_dir: /repo
     environment:
-      API_DB: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault
-      LEDGER_DB: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault_ledger
-    command:
-      - sh
-      - -c
-      - >
-        cd /repo &&
-        DATABASE_URL=$$API_DB pnpm --filter @zeitvault/api db:migrate &&
-        DATABASE_URL=$$LEDGER_DB pnpm --filter @zeitvault/ledger db:migrate
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault
+    command: ['pnpm', '--filter', '@zeitvault/api', 'db:migrate']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate-ledger:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+      target: build
+    restart: 'no'
+    working_dir: /repo
+    environment:
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault_ledger
+    command: ['pnpm', '--filter', '@zeitvault/ledger', 'db:migrate']
     depends_on:
       postgres:
         condition: service_healthy
@@ -80,7 +90,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
+      migrate-ledger:
         condition: service_completed_successfully
 
   api:
@@ -104,7 +114,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      migrate:
+      migrate-api:
         condition: service_completed_successfully
 
   web:
