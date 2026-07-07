@@ -99,11 +99,16 @@ nano .env
 ```
 
 Mindestens setzen: `APP_DOMAIN`, `AUTH_DOMAIN`, `ACME_EMAIL` sowie **starke**
-`POSTGRES_PASSWORD` und `KEYCLOAK_ADMIN_PASSWORD`. Starke Werte erzeugen:
+`POSTGRES_PASSWORD` und `KEYCLOAK_ADMIN_PASSWORD`.
 
 ```bash
-openssl rand -base64 24
+openssl rand -hex 24     # fuer POSTGRES_PASSWORD (URL-sicher, Pflicht!)
+openssl rand -base64 24  # fuer KEYCLOAK_ADMIN_PASSWORD (beliebig stark)
 ```
+
+> **Wichtig:** `POSTGRES_PASSWORD` fliesst in Datenbank-URLs ein und muss
+> URL-sicher sein (nur `0-9 a-f`). Daher `-hex`, **nicht** `-base64` (dessen
+> Zeichen `/ + =` wuerden die URL zerstoeren).
 
 ---
 
