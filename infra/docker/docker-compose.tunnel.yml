@@ -1,0 +1,179 @@
+# ZeitVault - Betrieb hinter einem Cloudflare Tunnel (oder aehnlichem
+# TLS-terminierenden Tunnel). Cloudflare stellt echtes, oeffentlich vertrauenswuerdiges
+# HTTPS bereit; der Origin bleibt HTTP (Caddy :80). Dadurch:
+#   - sicherer Kontext im Browser -> echter OIDC-Login UND Passkey funktionieren,
+#   - keine offenen Ports am Host noetig (Tunnel baut nach aussen auf),
+#   - kein Let's Encrypt / kein Zertifikat am Host.
+#
+# Eigenstaendiger Stack (Projektname `zeitvault-tunnel`, eigene Volumes).
+# Alles laeuft same-origin unter EINEM Hostnamen: Web /, API /api, Keycloak /idp.
+#
+# Benoetigte .env-Werte: APP_DOMAIN (der oeffentliche Tunnel-Hostname, ohne Schema),
+# POSTGRES_PASSWORD, KEYCLOAK_ADMIN_PASSWORD. Fuer den mitgelieferten
+# cloudflared-Dienst zusaetzlich TUNNEL_TOKEN (siehe Runbook); er ist per Profil
+# `tunnel` optional - wer cloudflared selbst betreibt, laesst das Profil weg und
+# richtet den Tunnel auf http://<host>:80 (bzw. http://caddy:80) aus.
+name: zeitvault-tunnel
+
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: zeitvault
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD fehlt}
+      POSTGRES_DB: zeitvault
+    volumes:
+      - pgdata:/var/lib/postgresql
+      - ./postgres-init-prod:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U zeitvault']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  migrate-api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+      target: build
+    restart: 'no'
+    working_dir: /repo
+    environment:
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault
+    command: ['pnpm', '--filter', '@zeitvault/api', 'db:migrate']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  migrate-ledger:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+      target: build
+    restart: 'no'
+    working_dir: /repo
+    environment:
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault_ledger
+    command: ['pnpm', '--filter', '@zeitvault/ledger', 'db:migrate']
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    restart: unless-stopped
+    command: ['start', '--import-realm']
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
+      KC_DB_USERNAME: zeitvault
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # Oeffentliche Basis-URL ist HTTPS (Cloudflare-Edge) + relativer Pfad /idp.
+      # Ergibt den Issuer https://<APP_DOMAIN>/idp/realms/zeitvault. Der Origin-Hop
+      # ist zwar HTTP, aber KC_HOSTNAME (explizit https) bestimmt die erzeugten URLs;
+      # zusaetzlich setzt Caddy X-Forwarded-Proto=https.
+      KC_HOSTNAME: https://${APP_DOMAIN}
+      KC_HTTP_RELATIVE_PATH: /idp
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HTTP_ENABLED: 'true'
+      KC_PROXY_HEADERS: xforwarded
+      KC_HEALTH_ENABLED: 'true'
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN:-admin}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?KEYCLOAK_ADMIN_PASSWORD fehlt}
+    volumes:
+      - ./keycloak-prod/import:/opt/keycloak/data/import:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  ledger:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.ledger
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault_ledger
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-ledger:
+        condition: service_completed_successfully
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.api
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: '3000'
+      DATABASE_URL: postgres://zeitvault:${POSTGRES_PASSWORD}@postgres:5432/zeitvault
+      LEDGER_URL: http://ledger:3001
+      AUTH_MODE: oidc
+      # Issuer = oeffentliche URL (fuer die iss-Pruefung), JWKS aber INTERN abrufen.
+      KEYCLOAK_ISSUER_URL: https://${APP_DOMAIN}/idp/realms/zeitvault
+      KEYCLOAK_JWKS_URI: http://keycloak:8080/idp/realms/zeitvault/protocol/openid-connect/certs
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_AUDIENCE:-account}
+      CORS_ORIGINS: https://${APP_DOMAIN}
+      OPERATION_MODE: self_hosted
+      LICENSE_PUBLIC_KEY: ${LICENSE_PUBLIC_KEY:-}
+      LICENSE_GRACE_SEATS: ${LICENSE_GRACE_SEATS:-5}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate-api:
+        condition: service_completed_successfully
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.web
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ''
+        NEXT_PUBLIC_AUTH_MODE: 'oidc'
+        NEXT_PUBLIC_TENANT_ID: 'default'
+        # Hostunabhaengig: leere Authority + relativer Pfad -> zur Laufzeit aus dem
+        # Ursprung abgeleitet (https://<tunnel-host>/idp/realms/zeitvault). So muss
+        # das Web-Image bei Hostname-Wechsel NICHT neu gebaut werden.
+        NEXT_PUBLIC_OIDC_AUTHORITY: ''
+        NEXT_PUBLIC_OIDC_AUTHORITY_PATH: '/idp/realms/zeitvault'
+        NEXT_PUBLIC_OIDC_CLIENT_ID: 'zeitvault-web'
+        NEXT_PUBLIC_OIDC_SCOPE: 'openid'
+    restart: unless-stopped
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    # Kein veroeffentlichter Port noetig, wenn cloudflared im selben Netz laeuft
+    # (es erreicht caddy:80 direkt). Fuer einen extern betriebenen cloudflared den
+    # Port freigeben und den Tunnel auf http://<host>:80 richten.
+    ports:
+      - '80:80'
+    volumes:
+      - ./caddy/Caddyfile.tunnel:/etc/caddy/Caddyfile:ro
+      - caddydata:/data
+      - caddyconfig:/config
+    depends_on:
+      - web
+      - api
+      - keycloak
+
+  # Optionaler Cloudflare-Tunnel-Client. Aktivieren mit:
+  #   docker compose --profile tunnel -f docker-compose.tunnel.yml up -d
+  # Voraussetzung: TUNNEL_TOKEN in der .env (aus dem Cloudflare-Zero-Trust-Dashboard);
+  # dort den oeffentlichen Hostnamen (APP_DOMAIN) auf den Dienst http://caddy:80 routen.
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    restart: unless-stopped
+    profiles: ['tunnel']
+    command: ['tunnel', '--no-autoupdate', 'run', '--token', '${TUNNEL_TOKEN:-}']
+    depends_on:
+      - caddy
+
+volumes:
+  pgdata:
+  caddydata:
+  caddyconfig:

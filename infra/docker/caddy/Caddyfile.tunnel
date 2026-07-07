@@ -1,0 +1,34 @@
+# ZeitVault hinter einem TLS-terminierenden Tunnel/Proxy (z. B. Cloudflare Tunnel).
+# Der Origin spricht HTTP (Port 80); das echte HTTPS terminiert der Tunnel an der
+# Edge. Ein Ursprung, pfadbasiertes Routing (kein CORS, kein Mixed-Content):
+#   /        -> Next.js-Web-App
+#   /api/*   -> NestJS-API
+#   /idp/*   -> Keycloak (unter KC_HTTP_RELATIVE_PATH=/idp)
+#
+# Wichtig: Der Origin-Hop ist HTTP, die Nutzer-Verbindung aber HTTPS. Damit
+# Keycloak korrekte https-URLs/Cookies erzeugt, wird X-Forwarded-Proto explizit
+# auf https gesetzt (zusaetzlich zu KC_HOSTNAME=https://... im Compose).
+
+{
+	auto_https off
+}
+
+:80 {
+	encode zstd gzip
+
+	handle /api/* {
+		reverse_proxy api:3000 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle /idp/* {
+		reverse_proxy keycloak:8080 {
+			header_up X-Forwarded-Proto https
+		}
+	}
+
+	handle {
+		reverse_proxy web:3000
+	}
+}
