@@ -127,14 +127,14 @@ export class ReportingService {
 
     const entries: ViolationEntry[] = [];
     for (const [employeeId, empRows] of byEmployee) {
+      const displayName = names.get(employeeId);
+      // Nur reale Mitarbeitende: Stempel ohne zugehoerigen Mitarbeiterdatensatz
+      // (z. B. Import-/Testartefakte) gehoeren nicht in den Verstoszreport und
+      // wuerden sonst als rohe UUID erscheinen.
+      if (!displayName) continue;
       for (const day of this.aggregateDays(empRows)) {
         if (day.findings.length > 0) {
-          entries.push({
-            employeeId,
-            displayName: names.get(employeeId) ?? employeeId,
-            date: day.date,
-            findings: day.findings,
-          });
+          entries.push({ employeeId, displayName, date: day.date, findings: day.findings });
         }
       }
     }
