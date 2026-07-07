@@ -337,3 +337,53 @@ Abschnitt 6 starten.
 > Hinweis: Wird die IP später geändert, muss das Web-Image neu gebaut werden
 > (`--build`), da die Keycloak-Authority zur Build-Zeit eingebacken wird; der
 > Realm ist erneut aus dem Template zu erzeugen.
+
+---
+
+## 13. Zugriff über Cloudflare Tunnel (echtes HTTPS, ohne offene Ports)
+
+Empfohlen, wenn keine Ports am Host geöffnet werden sollen: Cloudflare terminiert
+echtes, öffentlich vertrauenswürdiges HTTPS an der Edge, der Tunnel baut die
+Verbindung **nach außen** auf. Vorteile gegenüber dem IP-Test: **sicherer Kontext**
+im Browser → **echter OIDC-Login und Passkey/WebAuthn funktionieren**. Der Origin
+bleibt HTTP (Caddy `:80`), alles liegt same-origin unter einem Hostnamen
+(`/` Web, `/api` API, `/idp` Keycloak).
+
+**a) Öffentlichen Hostnamen festlegen.** In der `.env` `APP_DOMAIN` auf den
+Tunnel-Hostnamen setzen (z. B. `zeitvault.example.com`), dazu `POSTGRES_PASSWORD`
+und `KEYCLOAK_ADMIN_PASSWORD` (wie Abschnitt 4).
+
+**b) Realm aus dem Produktions-Template erzeugen** (HTTPS-Origins, Passkey):
+
+```bash
+cd /opt/zeitvault/infra/docker
+set -a && . ./.env && set +a
+sed "s#\${APP_DOMAIN}#${APP_DOMAIN}#g" \
+  keycloak-prod/zeitvault-realm.template.json \
+  > keycloak-prod/import/zeitvault-realm.json
+python3 -c "import json;json.load(open('keycloak-prod/import/zeitvault-realm.json'));print('Realm OK')"
+```
+
+**c) Cloudflare-Tunnel einrichten** (im Cloudflare-Zero-Trust-Dashboard):
+`Networks → Tunnels → Create tunnel` → Token kopieren → als `TUNNEL_TOKEN` in die
+`.env`. Beim Tunnel einen **Public Hostname** anlegen: `APP_DOMAIN` → Service
+`http://caddy:80` (der mitgelieferte `cloudflared`-Container erreicht Caddy im
+Compose-Netz). Betreibt ihr `cloudflared` selbst auf dem Host, stattdessen Service
+`http://localhost:80` und Port 80 des `caddy`-Dienstes freigeben.
+
+**d) Stack starten** (mit mitgeliefertem cloudflared über Profil `tunnel`):
+
+```bash
+docker compose --profile tunnel -f docker-compose.tunnel.yml up -d --build
+docker compose -f docker-compose.tunnel.yml ps
+docker compose -f docker-compose.tunnel.yml logs migrate-api migrate-ledger cloudflared
+```
+
+Danach über `https://APP_DOMAIN` erreichbar – echtes Zertifikat, grünes Schloss.
+Login und (dank echtem Hostnamen) auch Passkey funktionieren. Ersteinrichtung wie
+Abschnitt 7.
+
+> Das Web-Image ist hier **hostunabhängig** gebaut (die Authority wird zur Laufzeit
+> aus dem Ursprung abgeleitet). Ein Wechsel des Tunnel-Hostnamens erfordert daher
+> nur `APP_DOMAIN` anzupassen, den Realm neu zu erzeugen und die Container neu zu
+> starten – **kein** Neubau des Web-Images.
