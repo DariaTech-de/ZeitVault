@@ -82,6 +82,18 @@ describe('computeStampStatus', () => {
     expect(status.workedMinutes).toBe(8 * 60);
     expect(status.breakMinutes).toBe(30);
   });
+
+  it('liegt "jetzt" vor dem offenen Segment, ergibt 0 Minuten statt eines Fehlers', () => {
+    // Uhrzeit-Versatz/zukuenftig datierte Stempelung: now < Beginn des offenen
+    // Segments darf keinen Fehler werfen (Live-Ansicht bleibt robust).
+    const status = computeStampStatus(
+      day(['clock_in', '2026-06-26T08:00:00Z']),
+      d('2026-06-26T02:00:00Z'),
+    );
+    expect(status.state).toBe('in');
+    expect(status.workedMinutes).toBe(0);
+    expect(status.breakMinutes).toBe(0);
+  });
 });
 
 describe('evaluateStampDay (Live-ArbZG-Pruefung)', () => {

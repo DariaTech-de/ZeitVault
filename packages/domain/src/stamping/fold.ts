@@ -94,10 +94,14 @@ export function materializeStampDay(
   const workIntervals: WorkInterval[] = [...fold.workIntervals];
   const breakIntervals: BreakInterval[] = [...fold.breakIntervals];
   if (fold.open) {
+    // Offenes Segment bis "jetzt" schliessen. Liegt "jetzt" vor dem Beginn (z. B.
+    // durch Uhrzeit-Versatz oder eine zukuenftig datierte Stempelung), auf den
+    // Beginn klemmen -> 0 Minuten statt eines negativen (ungueltigen) Intervalls.
+    const end = now.getTime() < fold.open.since.getTime() ? fold.open.since : now;
     if (fold.open.kind === 'work') {
-      workIntervals.push({ start: fold.open.since, end: now });
+      workIntervals.push({ start: fold.open.since, end });
     } else {
-      breakIntervals.push({ start: fold.open.since, end: now });
+      breakIntervals.push({ start: fold.open.since, end });
     }
   }
   return { workIntervals, breakIntervals };
