@@ -48,10 +48,21 @@ export async function fetchToday(session: Session, employeeId: string): Promise<
   return (await res.json()) as TodayResponse;
 }
 
+/**
+ * Position, die eine Stempelung optional mitträgt. GPS ist standardmäßig aus
+ * (Kern-Invariante 5); die App erfasst nur, wenn der Mandant Geofencing
+ * aktiviert hat (ADR-0014).
+ */
+export interface StampLocation {
+  latitude: number;
+  longitude: number;
+  accuracyMeters?: number;
+}
+
 export async function syncStamps(
   session: Session,
   employeeId: string,
-  items: ReadonlyArray<{ clientEventId: string; kind: string; occurredAt: string }>,
+  items: ReadonlyArray<{ clientEventId: string; kind: string; occurredAt: string; location?: StampLocation }>,
 ): Promise<{ accepted: number; duplicates: number }> {
   const res = await fetch(`${API_BASE}/api/stamp/sync`, {
     method: 'POST',

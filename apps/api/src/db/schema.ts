@@ -1,6 +1,7 @@
 import {
   boolean,
   date,
+  doublePrecision,
   index,
   integer,
   jsonb,
@@ -93,6 +94,9 @@ export const stampKind = pgEnum('stamp_kind', [
   'clock_out',
 ]);
 
+/** Ergebnis der Standort-Prüfung (Geofencing); Default 'not_required'. */
+export const locationCheck = pgEnum('location_check', ['not_required', 'inside', 'outside', 'no_signal']);
+
 /**
  * Rohe Stempelungen (Kommen/Gehen/Pausen) als append-only Ereignisse. Eine
  * Korrektur erzeugt ein NEUES Ereignis; UPDATE/DELETE werden per Trigger
@@ -113,6 +117,11 @@ export const stampEvents = pgTable(
     correctionReason: text('correction_reason'),
     // Idempotenzschluessel fuer Offline-Sync (B3); NULL bei Server-Erfassung.
     clientEventId: uuid('client_event_id'),
+    // Standort-Pruefung (Geofencing, ADR-0014). Beim Insert einmalig gesetzt;
+    // Datensparsamkeit: nur Ergebnis/Standort/Distanz, keine rohen Koordinaten.
+    locationCheck: locationCheck('location_check').notNull().default('not_required'),
+    locationSiteId: uuid('location_site_id'),
+    locationDistanceM: integer('location_distance_m'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -123,6 +132,47 @@ export const stampEvents = pgTable(
 
 export type StampEventRow = typeof stampEvents.$inferSelect;
 export type NewStampEventRow = typeof stampEvents.$inferInsert;
+
+/** Mandanteneinstellung Geofencing (Default AUS, Kern-Invariante 5). */
+export const geofenceSettings = pgTable('geofence_settings', {
+  tenantId: varchar('tenant_id', { length: 64 }).primaryKey(),
+  enabled: boolean('enabled').notNull().default(false),
+  updatedBy: varchar('updated_by', { length: 128 }),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+export type GeofenceSettingsRow = typeof geofenceSettings.$inferSelect;
+
+/** Standorte/Geofences eines Mandanten (Mittelpunkt + Radius in Metern). */
+export const geofenceSites = pgTable(
+  'geofence_sites',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    name: varchar('name', { length: 120 }).notNull(),
+    latitude: doublePrecision('latitude').notNull(),
+    longitude: doublePrecision('longitude').notNull(),
+    radiusM: integer('radius_m').notNull(),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('geofence_sites_tenant_idx').on(t.tenantId)],
+);
+export type GeofenceSiteRow = typeof geofenceSites.$inferSelect;
+
+/** Admin-Kennzeichnung eines Stempels („blinken"); getrennte Workflow-Entität. */
+export const stampFlags = pgTable(
+  'stamp_flags',
+  {
+    eventId: uuid('event_id').primaryKey(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    flagged: boolean('flagged').notNull().default(true),
+    reason: text('reason'),
+    flaggedBy: varchar('flagged_by', { length: 128 }),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('stamp_flags_tenant_idx').on(t.tenantId)],
+);
+export type StampFlagRow = typeof stampFlags.$inferSelect;
 
 export const absenceType = pgEnum('absence_type', ['vacation', 'sick', 'special']);
 export const absenceStatus = pgEnum('absence_status', [

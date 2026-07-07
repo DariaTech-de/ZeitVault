@@ -146,6 +146,22 @@ const TOPICS: Topic[] = [
     },
   },
   {
+    id: 'standort',
+    title: 'Standort-Prüfung (Geofencing)',
+    roles: ['manager', 'admin'],
+    intro:
+      'Optional kann beim Stempeln geprüft werden, ob sich Mitarbeitende an einem hinterlegten Standort befinden. Standardmäßig deaktiviert – Aktivierung nur nach Betriebsvereinbarung (BetrVG § 87, Kern-Invariante 5).',
+    steps: [
+      'Aktivieren (Admin): im Bereich „Standort" die Prüfung einschalten – nur mit gültiger Betriebsvereinbarung.',
+      'Standorte hinterlegen: Mittelpunkt (Breite/Länge) und Radius in Metern.',
+      'Prüfen: auffällige Stempel (außerhalb / ohne Signal) werden hervorgehoben und können zur Nachverfolgung gekennzeichnet werden.',
+    ],
+    note: {
+      tone: 'warning',
+      text: 'Datensparsamkeit: gespeichert werden nur das Prüfergebnis, der Standort und die gerundete Distanz – keine rohen Koordinaten. Ist die Prüfung aus, werden keine Standortdaten erhoben.',
+    },
+  },
+  {
     id: 'sicherheit',
     title: 'Sicherheit',
     roles: ['manager', 'admin'],

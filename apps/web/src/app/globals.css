@@ -128,3 +128,8 @@
   ::selection { background: var(--primary-weak); }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
 }
+
+/* „Blinken" für zu prüfende Stempel (außerhalb/ohne Signal). */
+@keyframes zvBlink { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.zv-blink { animation: zvBlink 1.1s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) { .zv-blink { animation: none; } }

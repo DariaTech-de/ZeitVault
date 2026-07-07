@@ -15,3 +15,4 @@ export * from './eau';
 export * from './correction';
 export * from './license';
 export * from './employee';
+export * from './geofence';

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { isoTimestampSchema, uuidSchema } from './common';
+import { stampLocationSchema } from './geofence';
 
 /** Art einer Stempelung. */
 export const stampKindSchema = z.enum(['clock_in', 'break_start', 'break_end', 'clock_out']);
@@ -16,6 +17,9 @@ export const stampSchema = z.object({
   employeeId: uuidSchema,
   source: stampSourceSchema.default('web'),
   occurredAt: isoTimestampSchema.optional(),
+  // Optionale Position (nur wenn Geofencing aktiviert ist, ADR-0014). GPS ist
+  // standardmaessig aus (Kern-Invariante 5); die App sendet nichts ungefragt.
+  location: stampLocationSchema.optional(),
 });
 export type StampInput = z.infer<typeof stampSchema>;
 

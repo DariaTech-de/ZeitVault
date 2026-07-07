@@ -365,6 +365,28 @@ Status: Paket, belegte/verfügbare Sitzplätze und Gültigkeit.
 > wird nur der öffentliche Schlüssel konfiguriert. Details:
 > [`adr/0013-lizenzierung-pro-mitarbeiter.md`](adr/0013-lizenzierung-pro-mitarbeiter.md).
 
+### 13.2 Standort-Prüfung (Geofencing)
+
+Menüpunkt **„Standort"** (nur Vorgesetzte/Admins). Optional kann beim Stempeln
+geprüft werden, ob sich Mitarbeitende an einem hinterlegten Betriebsstandort
+befinden.
+
+- **Standardmäßig deaktiviert (Kern-Invariante 5):** Die Prüfung ist aus und darf
+  **nur nach Betriebsvereinbarung** aktiviert werden (Mitbestimmung, BetrVG § 87).
+  Ist sie aus, werden keinerlei Standortdaten erhoben oder ausgewertet.
+- **Standorte:** Je Standort werden Mittelpunkt (Breite/Länge) und Radius in
+  Metern hinterlegt.
+- **Prüfergebnis:** Beim Stempeln wird die Position (sofern die App sie sendet)
+  gegen die Standorte geprüft. Gespeichert wird nur das Ergebnis (im Standort /
+  außerhalb / ohne Signal), der getroffene Standort und die gerundete Distanz –
+  **keine rohen Koordinaten** (Datensparsamkeit).
+- **Kennzeichnen („blinken"):** Auffällige Stempel (außerhalb / ohne Signal)
+  werden hervorgehoben. Die Administration kann einen Stempel zur Nachverfolgung
+  kennzeichnen; der Stempel selbst bleibt unverändert (append-only).
+
+> Aktivierung und Kennzeichnung werden revisionssicher protokolliert. Details:
+> [`adr/0014-standort-pruefung-geofence-opt-in.md`](adr/0014-standort-pruefung-geofence-opt-in.md).
+
 ---
 
 ## 14. Häufige Aufgaben (Schritt für Schritt)
@@ -423,8 +445,9 @@ Nein. Das Audit-Ledger ist append-only und hash-verkettet. Änderungen sind
 technisch ausgeschlossen und würden die Kette sichtbar brechen.
 
 **Wo sehe ich, ob GPS/Standort aktiv ist?**
-GPS/Geofencing ist standardmäßig deaktiviert und wird nur nach
-Betriebsvereinbarung eingeschaltet.
+Im Bereich „Standort" zeigt der Status, ob die Prüfung aktiv ist. GPS/Geofencing
+ist standardmäßig deaktiviert und wird nur nach Betriebsvereinbarung
+eingeschaltet.
 
 ---
 

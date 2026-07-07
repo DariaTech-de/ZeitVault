@@ -12,10 +12,12 @@ import {
   resolveEffectiveEvents,
   type StampStatus,
 } from '@zeitvault/domain';
+import type { StampLocation } from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
 import { type StampEventRow, stampEvents } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { GeofenceService } from '../geofence/geofence.service';
 
 const STAMP_AUDIT_ACTION = {
   clock_in: 'time.clock_in',
@@ -71,6 +73,7 @@ export class StampingService {
     @Inject(DB) private readonly db: Database,
     private readonly tenantContext: TenantContextService,
     private readonly audit: AuditClient,
+    private readonly geofence: GeofenceService,
   ) {}
 
   /** Verarbeitet eine Stempelung (validiert den Statuswechsel inkl. Korrekturen). */
@@ -79,9 +82,14 @@ export class StampingService {
     kind: StampKind;
     source: 'web' | 'mobile' | 'terminal';
     occurredAt?: string;
+    location?: StampLocation;
   }): Promise<StampResult> {
     const ctx = this.tenantContext.require();
     const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
+    // Standort-Pruefung (nur wenn je Mandant aktiviert; sonst 'not_required'
+    // ohne Auswertung der Position, Kern-Invariante 5). Ausserhalb der
+    // Insert-Transaktion ausgewertet.
+    const geo = await this.geofence.checkStampLocation(input.location);
 
     let result: { row: StampEventRow | undefined; events: StampEvent[] };
     try {
@@ -106,6 +114,9 @@ export class StampingService {
             kind: input.kind,
             occurredAt,
             source: input.source,
+            locationCheck: geo.check,
+            locationSiteId: geo.siteId,
+            locationDistanceM: geo.distanceM,
           })
           .returning();
         return { row: inserted[0], events: candidate };
@@ -272,16 +283,19 @@ export class StampingService {
    */
   async sync(input: {
     employeeId: string;
-    items: ReadonlyArray<{ clientEventId: string; kind: StampKind; occurredAt: string }>;
+    items: ReadonlyArray<{ clientEventId: string; kind: StampKind; occurredAt: string; location?: StampLocation }>;
   }): Promise<{ accepted: number; duplicates: number }> {
     const ctx = this.tenantContext.require();
     const acceptedItems: Array<{ kind: StampKind; id: string }> = [];
     let summary = { accepted: 0, duplicates: 0 };
+    // Standort-Auswerter EINMAL laden (Einstellungen + aktive Standorte); wertet
+    // die offline erfassten Positionen rein in-memory aus (Kern-Invariante 5).
+    const evaluate = await this.geofence.buildEvaluator();
 
     try {
       summary = await this.db.transaction(async (tx) => {
         await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
-        const byDay = new Map<string, Array<{ clientEventId: string; kind: StampKind; occurredAt: string }>>();
+        const byDay = new Map<string, Array<{ clientEventId: string; kind: StampKind; occurredAt: string; location?: StampLocation }>>();
         for (const item of input.items) {
           const day = new Date(item.occurredAt).toISOString().slice(0, 10);
           const bucket = byDay.get(day) ?? [];
@@ -313,6 +327,7 @@ export class StampingService {
           foldStampDay(resolveEffectiveEvents(candidate));
 
           for (const it of fresh) {
+            const geo = evaluate(it.location);
             const inserted = await tx
               .insert(stampEvents)
               .values({
@@ -322,6 +337,9 @@ export class StampingService {
                 occurredAt: new Date(it.occurredAt),
                 source: 'mobile',
                 clientEventId: it.clientEventId,
+                locationCheck: geo.check,
+                locationSiteId: geo.siteId,
+                locationDistanceM: geo.distanceM,
               })
               .onConflictDoNothing()
               .returning();

@@ -8,6 +8,7 @@ import { TenantModule } from './common/tenant.module';
 import { DbModule } from './db/db.module';
 import { EauModule } from './eau/eau.module';
 import { ExportModule } from './export/export.module';
+import { GeofenceModule } from './geofence/geofence.module';
 import { HealthModule } from './health/health.module';
 import { LicensingModule } from './licensing/licensing.module';
 import { MeModule } from './me/me.module';
@@ -44,6 +45,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     MeModule,
     CorrectionModule,
     LicensingModule,
+    GeofenceModule,
   ],
 })
 export class AppModule {}

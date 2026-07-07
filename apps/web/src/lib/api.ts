@@ -250,6 +250,63 @@ export function createEmployee(
   });
 }
 
+export type LocationCheck = 'not_required' | 'inside' | 'outside' | 'no_signal';
+
+export interface GeofenceSite {
+  id: string;
+  name: string;
+  latitude: number;
+  longitude: number;
+  radiusMeters: number;
+  active: boolean;
+}
+
+export interface GeofenceReviewStamp {
+  eventId: string;
+  employeeId: string;
+  kind: string;
+  occurredAt: string;
+  locationCheck: LocationCheck;
+  distanceM: number | null;
+  siteName: string | null;
+  flagged: boolean;
+  flagReason: string | null;
+}
+
+export function fetchGeofenceSettings(identity: Identity): Promise<{ enabled: boolean }> {
+  return request(identity, '/api/geofence/settings');
+}
+
+export function setGeofenceEnabled(identity: Identity, enabled: boolean): Promise<{ enabled: boolean }> {
+  return request(identity, '/api/geofence/settings', { method: 'PUT', body: JSON.stringify({ enabled }) });
+}
+
+export function fetchGeofenceSites(identity: Identity): Promise<GeofenceSite[]> {
+  return request(identity, '/api/geofence/sites');
+}
+
+export function createGeofenceSite(
+  identity: Identity,
+  input: { name: string; latitude: number; longitude: number; radiusMeters: number },
+): Promise<GeofenceSite> {
+  return request(identity, '/api/geofence/sites', { method: 'POST', body: JSON.stringify(input) });
+}
+
+export function deactivateGeofenceSite(identity: Identity, id: string): Promise<{ ok: true }> {
+  return request(identity, `/api/geofence/sites/${id}`, { method: 'DELETE' });
+}
+
+export function fetchGeofenceReview(identity: Identity): Promise<GeofenceReviewStamp[]> {
+  return request(identity, '/api/geofence/review');
+}
+
+export function flagStamp(
+  identity: Identity,
+  input: { eventId: string; flagged: boolean; reason?: string },
+): Promise<{ ok: true }> {
+  return request(identity, '/api/geofence/flags', { method: 'POST', body: JSON.stringify(input) });
+}
+
 export interface ViolationEntry {
   employeeId: string;
   displayName: string;
