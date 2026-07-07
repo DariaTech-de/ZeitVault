@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { MessageStrip } from '@/components/fiori/message-strip';
 import { Sparkline } from '@/components/fiori/sparkline';
@@ -164,7 +165,10 @@ export function Launchpad() {
         <div className="rounded-card border border-line bg-surface p-[17px] [box-shadow:var(--shadow-sm)] sm:col-span-2 [background:radial-gradient(120%_140%_at_100%_0%,color-mix(in_srgb,var(--primary)_12%,var(--surface))_0%,var(--surface)_46%)]">
           <div className="flex items-center justify-between">
             <span className="text-[13.5px] font-semibold text-ink-muted">Heute · Live</span>
-            <span className="grid h-[30px] w-[30px] place-items-center rounded-lg bg-primary-weak text-primary">{icons.clock}</span>
+            <Link href="/heute" className="flex items-center gap-1 text-[13px] font-medium text-primary transition hover:underline">
+              Tagesübersicht
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="h-3.5 w-3.5"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+            </Link>
           </div>
           <div className="mono mt-3 text-[40px] font-semibold leading-none tracking-tight">{hm(today?.workedMinutes ?? 0)}<span className="text-lg text-ink-faint"> h gearbeitet</span></div>
           <div className="mt-3.5 flex gap-7">

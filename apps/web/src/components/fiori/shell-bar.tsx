@@ -41,6 +41,7 @@ export function ShellBar() {
 
   const nav: Array<{ href: string; label: string; show: boolean }> = [
     { href: '/', label: 'Start', show: true },
+    { href: '/heute', label: 'Heute', show: true },
     { href: '/abwesenheit', label: 'Abwesenheit', show: true },
     { href: '/zeitkorrektur', label: 'Zeitkorrektur', show: true },
     { href: '/konten', label: 'Konten', show: true },
