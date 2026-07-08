@@ -11,6 +11,7 @@ import {
   isGermanHoliday,
 } from '@zeitvault/domain';
 import type { CreateWorkTimeModel } from '@zeitvault/types';
+import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
 import { type WorkTimeModelRow, workTimeModels } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
@@ -20,6 +21,7 @@ export class WorkTimeService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly tenantContext: TenantContextService,
+    private readonly audit: AuditClient,
   ) {}
 
   async create(input: CreateWorkTimeModel): Promise<WorkTimeModelRow> {
@@ -41,6 +43,15 @@ export class WorkTimeService {
     if (!row) {
       throw new Error('Arbeitszeitmodell konnte nicht gespeichert werden.');
     }
+    // Stammdaten-Aenderung ist lohnrelevant -> Audit-Trail (G-01).
+    await this.audit.append({
+      tenantId: ctx.tenantId,
+      action: 'work_time_model.create',
+      actorId: ctx.userId,
+      subjectType: 'work_time_model',
+      subjectId: row.id,
+      payload: { name: row.name, validFrom: row.validFrom, validTo: row.validTo ?? '' },
+    });
     return row;
   }
 

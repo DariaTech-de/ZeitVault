@@ -1,11 +1,12 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 import {
+  ARBZG_2026_V1,
   type DatevMapping,
   type PayrollAggregate,
   type PayrollCategory,
   type StampEvent,
-  computeStampStatus,
+  buildAccountingDays,
   countWorkingDays,
   mapToLineItems,
   toPayrollCsv,
@@ -21,6 +22,7 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { WorkLocationService } from '../work-location/work-location.service';
 import { type GobdRecord, checksum, serializeGobd } from './export.serialize';
 
 const ABSENCE_CATEGORY: Record<string, PayrollCategory> = {
@@ -65,6 +67,7 @@ export class ExportService {
     @Inject(DB) private readonly db: Database,
     private readonly tenantContext: TenantContextService,
     private readonly audit: AuditClient,
+    private readonly workLocations: WorkLocationService,
   ) {}
 
   /**
@@ -75,6 +78,9 @@ export class ExportService {
    */
   async runGobd(from: string, to: string, format: 'csv' | 'json'): Promise<ExportResult> {
     const ctx = this.tenantContext.require();
+    // BEWUSST UTC-Periodengrenzen: der GoBD-Pruefexport ist ein ROHDATEN-Export
+    // (alle Ereignisse eines Zeitfensters, reproduzierbar per Pruefsumme). Die
+    // fachliche Zuordnung zu Abrechnungstagen erfolgt im Lohnexport (ADR-0018).
     const start = new Date(`${from}T00:00:00.000Z`);
     const endExclusive = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000);
 
@@ -190,8 +196,14 @@ export class ExportService {
   /** Aggregiert Arbeitszeit (Minuten) und genehmigte Abwesenheiten (Tage) je Mitarbeitenden. */
   private async aggregatePayroll(from: string, to: string): Promise<PayrollAggregate[]> {
     const ctx = this.tenantContext.require();
-    const start = new Date(`${from}T00:00:00.000Z`);
-    const endExclusive = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000);
+    // Ladefenster mit 48-h-Kontext: Schichten, die vor `from` beginnen oder am
+    // `to`-Tag ueber Mitternacht laufen, werden vollstaendig geladen; die
+    // Zuordnung erfolgt anschliessend je Abrechnungstag (ADR-0018, K-02).
+    const PAD_MS = 48 * 60 * 60 * 1000;
+    const start = new Date(new Date(`${from}T00:00:00.000Z`).getTime() - PAD_MS);
+    const endExclusive = new Date(
+      new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000 + PAD_MS,
+    );
 
     const { emps, stamps, absences } = await this.db.transaction(async (tx) => {
       await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
@@ -218,20 +230,27 @@ export class ExportService {
 
     const personnel = new Map(emps.map((e) => [e.id, e.personnelNumber]));
 
-    // Arbeitszeit je Mitarbeitenden (Summe der Tagesminuten).
-    const workedByEmployee = new Map<string, number>();
-    const byEmployeeDay = new Map<string, StampEventRow[]>();
+    // Arbeitszeit je Mitarbeitenden: schichtbasiert je ABRECHNUNGSTAG (lokaler
+    // Tag des Schichtbeginns in der Einsatzort-Zeitzone, ADR-0016/0018); nur
+    // Tage im Zeitraum [from, to] zaehlen - Nachtschichten wandern nicht in den
+    // falschen Abrechnungsmonat (K-02). Offene Segmente materialisieren zum
+    // Zeitraumende bzw. "jetzt" (das Fruehere), deterministisch fuer Historie.
+    const byEmployee = new Map<string, StampEvent[]>();
     for (const row of stamps) {
-      const key = `${row.employeeId}|${row.occurredAt.toISOString().slice(0, 10)}`;
-      const bucket = byEmployeeDay.get(key) ?? [];
-      bucket.push(row);
-      byEmployeeDay.set(key, bucket);
+      const bucket = byEmployee.get(row.employeeId) ?? [];
+      bucket.push(toStampEvent(row));
+      byEmployee.set(row.employeeId, bucket);
     }
-    for (const [key, rows] of byEmployeeDay) {
-      const employeeId = key.split('|')[0]!;
-      const date = key.split('|')[1]!;
-      const status = computeStampStatus(rows.map(toStampEvent), new Date(`${date}T23:59:59.999Z`));
-      workedByEmployee.set(employeeId, (workedByEmployee.get(employeeId) ?? 0) + status.workedMinutes);
+    const rangeEnd = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + PAD_MS);
+    const nowTs = new Date();
+    const materializeAt = nowTs.getTime() < rangeEnd.getTime() ? nowTs : rangeEnd;
+    const workedByEmployee = new Map<string, number>();
+    for (const [employeeId, events] of byEmployee) {
+      const tz = (await this.workLocations.resolve(employeeId, from)).timeZone;
+      const minutes = buildAccountingDays(events, tz, ARBZG_2026_V1, materializeAt)
+        .filter((d) => d.date >= from && d.date <= to)
+        .reduce((s, d) => s + d.workedMinutes, 0);
+      if (minutes > 0) workedByEmployee.set(employeeId, minutes);
     }
 
     // Genehmigte Abwesenheiten je Mitarbeitenden/Kategorie (Arbeitstage im Schnitt

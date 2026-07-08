@@ -5,11 +5,8 @@ import {
   type AccountBalance,
   type Finding,
   type StampEvent,
+  buildAccountingDays,
   computeBalances,
-  computeStampStatus,
-  evaluateStampDay,
-  foldStampDay,
-  resolveEffectiveEvents,
 } from '@zeitvault/domain';
 import { TenantContextService } from '../common/tenant-context.service';
 import {
@@ -20,19 +17,26 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { WorkLocationService } from '../work-location/work-location.service';
 
 function toStampEvent(row: StampEventRow): StampEvent {
   return { id: row.id, kind: row.kind, at: row.occurredAt, correctsId: row.correctsEventId };
 }
 
-function isoDate(date: Date): string {
-  return date.toISOString().slice(0, 10);
-}
+/**
+ * Kontext-Erweiterung des Ladefensters (ADR-0018): Schichten, die vor `from`
+ * beginnen und in den Zeitraum hineinragen (bzw. am `to`-Tag beginnen und
+ * danach enden), muessen vollstaendig geladen werden. 48 h decken jede Schicht
+ * samt Zeitzonen-Versatz ab.
+ */
+const RANGE_PAD_MS = 48 * 60 * 60 * 1000;
 
-/** Tagesgrenzen [from, to] (UTC, inklusiv) als Halboffenintervall fuer Queries. */
+/** Ladefenster [from, to] (lokale Kalendertage) mit Kontext-Vor-/Nachlauf. */
 function rangeWhere(column: typeof stampEvents.occurredAt, from: string, to: string): SQL {
-  const start = new Date(`${from}T00:00:00.000Z`);
-  const endExclusive = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000);
+  const start = new Date(new Date(`${from}T00:00:00.000Z`).getTime() - RANGE_PAD_MS);
+  const endExclusive = new Date(
+    new Date(`${to}T00:00:00.000Z`).getTime() + 24 * 60 * 60 * 1000 + RANGE_PAD_MS,
+  );
   return and(gte(column, start), lt(column, endExclusive)) as SQL;
 }
 
@@ -70,6 +74,7 @@ export class ReportingService {
   constructor(
     @Inject(DB) private readonly db: Database,
     private readonly tenantContext: TenantContextService,
+    private readonly workLocations: WorkLocationService,
   ) {}
 
   /** Stundenzettel: je Tag gearbeitete/pausierte Minuten und ArbZG-Befunde. */
@@ -90,7 +95,7 @@ export class ReportingService {
         .orderBy(asc(stampEvents.occurredAt));
     });
 
-    const days = this.aggregateDays(rows);
+    const days = await this.aggregateDays(employeeId, rows, from, to);
     return {
       employeeId,
       from,
@@ -132,7 +137,7 @@ export class ReportingService {
       // (z. B. Import-/Testartefakte) gehoeren nicht in den Verstoszreport und
       // wuerden sonst als rohe UUID erscheinen.
       if (!displayName) continue;
-      for (const day of this.aggregateDays(empRows)) {
+      for (const day of await this.aggregateDays(employeeId, empRows, from, to)) {
         if (day.findings.length > 0) {
           entries.push({ employeeId, displayName, date: day.date, findings: day.findings });
         }
@@ -180,38 +185,38 @@ export class ReportingService {
   }
 
   /**
-   * Gruppiert Rohereignisse nach UTC-Tag und bewertet jeden Tag (gearbeitete/
-   * pausierte Minuten, ArbZG-Befunde). Die Ruhezeit wird tagesuebergreifend mit
-   * dem Ende der jeweils vorigen Schicht verkettet.
+   * Bewertet die Schichten je ABRECHNUNGSTAG (lokaler Tag des Schichtbeginns
+   * in der Einsatzort-Zeitzone, ADR-0018) und liefert nur Tage im Zeitraum
+   * [from, to]. Nachtschichten bleiben ganze Schichten (K-02/K-03); die
+   * Ruhezeit verkettet schichtuebergreifend. Offene Segmente werden zum
+   * Zeitraumende bzw. "jetzt" geschlossen (das Fruehere von beiden), damit
+   * historische Zeitraeume deterministisch bleiben.
    */
-  private aggregateDays(rows: StampEventRow[]): TimesheetDay[] {
-    const byDay = new Map<string, StampEventRow[]>();
-    for (const row of rows) {
-      const day = isoDate(row.occurredAt);
-      const bucket = byDay.get(day) ?? [];
-      bucket.push(row);
-      byDay.set(day, bucket);
-    }
+  private async aggregateDays(
+    employeeId: string,
+    rows: StampEventRow[],
+    from: string,
+    to: string,
+  ): Promise<TimesheetDay[]> {
+    // Einsatzort-Zeitzone je Mitarbeitendem (Aufloesung zum Zeitraumbeginn;
+    // unterjaehrige Zuordnungswechsel innerhalb des Zeitraums: Schnitt 4).
+    const resolved = await this.workLocations.resolve(employeeId, from);
+    const rangeEnd = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + 48 * 60 * 60 * 1000);
+    const now = new Date();
+    const materializeAt = now.getTime() < rangeEnd.getTime() ? now : rangeEnd;
 
-    const days: TimesheetDay[] = [];
-    let previousShiftEnd: Date | null = null;
-    for (const date of [...byDay.keys()].sort()) {
-      const events = (byDay.get(date) ?? []).map(toStampEvent);
-      // Offene Segmente werden zum Tagesende geschlossen, um historische Tage
-      // deterministisch zu bewerten.
-      const endOfDay = new Date(`${date}T23:59:59.999Z`);
-      const status = computeStampStatus(events, endOfDay);
-      const findings = evaluateStampDay(events, ARBZG_2026_V1, endOfDay, { date, previousShiftEnd });
-      days.push({
-        date,
-        workedMinutes: status.workedMinutes,
-        breakMinutes: status.breakMinutes,
-        findings,
-      });
-      const fold = foldStampDay(resolveEffectiveEvents(events));
-      const last = fold.workIntervals.at(-1);
-      if (last) previousShiftEnd = last.end;
-    }
-    return days;
+    return buildAccountingDays(
+      rows.map(toStampEvent),
+      resolved.timeZone,
+      ARBZG_2026_V1,
+      materializeAt,
+    )
+      .filter((day) => day.date >= from && day.date <= to)
+      .map((day) => ({
+        date: day.date,
+        workedMinutes: day.workedMinutes,
+        breakMinutes: day.breakMinutes,
+        findings: day.findings,
+      }));
   }
 }
