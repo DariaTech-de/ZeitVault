@@ -1,9 +1,18 @@
 import { BadRequestException, Inject, Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import { and, desc, eq, sql } from 'drizzle-orm';
-import type { MapNfc, NfcMapping, StampKind, TerminalStamp, TerminalStampResult, TerminalSummary } from '@zeitvault/types';
+import type {
+  KioskIdentify,
+  KioskIdentifyResult,
+  MapNfc,
+  NfcMapping,
+  StampKind,
+  TerminalStamp,
+  TerminalStampResult,
+  TerminalSummary,
+} from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
-import { employees, nfcCredentials, terminals } from '../db/schema';
+import { employeePhotos, employees, nfcCredentials, terminals } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
 import { StampingService } from '../stamping/stamping.service';
 import { createDeviceToken, safeHashEqual } from './terminal.token';
@@ -126,21 +135,68 @@ export class TerminalService {
     });
   }
 
-  /** Stempelvorgang vom Terminal (NFC oder lokal aufgelöster Fingerabdruck). */
+  /**
+   * Identifiziert eine Person am Terminal OHNE zu stempeln – für die Anzeige von
+   * Foto/Name/Status und die Auswahl Kommen/Gehen/Pause vor dem Bestätigen.
+   */
+  async identify(input: KioskIdentify): Promise<KioskIdentifyResult> {
+    const employee = await this.resolveEmployee(input);
+    const today = await this.stamping.today(employee.id);
+    const hasPhoto = await this.photoExists(employee.id);
+    return {
+      employeeId: employee.id,
+      employeeName: employee.displayName,
+      personnelNumber: employee.personnelNumber,
+      hasPhoto,
+      state: today.status.state,
+      suggestedKind: NEXT_KIND[today.status.state],
+    };
+  }
+
+  /** Stempelvorgang vom Terminal (NFC, Personalnummer oder lokaler Fingerabdruck). */
   async stamp(input: TerminalStamp): Promise<TerminalStampResult> {
     const employee = await this.resolveEmployee(input);
     const kind = input.kind ?? (await this.nextKind(employee.id));
     const result = await this.stamping.stamp({ employeeId: employee.id, kind, source: 'terminal' });
+    const hasPhoto = await this.photoExists(employee.id);
     return {
+      employeeId: employee.id,
       employeeName: employee.displayName,
       personnelNumber: employee.personnelNumber,
+      hasPhoto,
       kind,
       state: result.status.state,
       occurredAt: result.event.occurredAt.toISOString(),
     };
   }
 
-  private async resolveEmployee(input: TerminalStamp): Promise<{ id: string; displayName: string; personnelNumber: string }> {
+  /** Foto (Anzeigebild) des Mitarbeitenden für die Terminal-Begrüßung (RLS). */
+  async getEmployeePhoto(employeeId: string): Promise<{ contentType: string; data: Buffer } | null> {
+    return this.tx(async (tx, tenantId) => {
+      const rows = await tx
+        .select({ contentType: employeePhotos.contentType, data: employeePhotos.data })
+        .from(employeePhotos)
+        .where(and(eq(employeePhotos.tenantId, tenantId), eq(employeePhotos.employeeId, employeeId)));
+      const row = rows[0];
+      return row ? { contentType: row.contentType, data: row.data } : null;
+    });
+  }
+
+  private async photoExists(employeeId: string): Promise<boolean> {
+    return this.tx(async (tx, tenantId) => {
+      const rows = await tx
+        .select({ id: employeePhotos.employeeId })
+        .from(employeePhotos)
+        .where(and(eq(employeePhotos.tenantId, tenantId), eq(employeePhotos.employeeId, employeeId)));
+      return rows.length > 0;
+    });
+  }
+
+  private async resolveEmployee(input: {
+    nfcUid?: string;
+    personnelNumber?: string;
+    employeeId?: string;
+  }): Promise<{ id: string; displayName: string; personnelNumber: string }> {
     return this.tx(async (tx, tenantId) => {
       let employeeId = input.employeeId;
       if (input.nfcUid) {
@@ -156,6 +212,13 @@ export class TerminalService {
           );
         if (!cred[0]) throw new NotFoundException('Unbekannter NFC-Chip.');
         employeeId = cred[0].employeeId;
+      } else if (input.personnelNumber) {
+        const byNr = await tx
+          .select({ id: employees.id })
+          .from(employees)
+          .where(and(eq(employees.tenantId, tenantId), eq(employees.personnelNumber, input.personnelNumber)));
+        if (!byNr[0]) throw new NotFoundException('Unbekannte Personalnummer.');
+        employeeId = byNr[0].id;
       }
       if (!employeeId) throw new BadRequestException('Kein Mitarbeitender ermittelt.');
       const emp = await tx

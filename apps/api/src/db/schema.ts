@@ -1,5 +1,6 @@
 import {
   boolean,
+  customType,
   date,
   doublePrecision,
   index,
@@ -13,6 +14,13 @@ import {
   uuid,
   varchar,
 } from 'drizzle-orm/pg-core';
+
+/** Binärspalte (bytea) für kleine Blobs wie Mitarbeiterfotos. */
+const bytea = customType<{ data: Buffer }>({
+  dataType() {
+    return 'bytea';
+  },
+});
 
 export const timeEntrySource = pgEnum('time_entry_source', ['web', 'mobile', 'terminal']);
 export const timeEntryStatus = pgEnum('time_entry_status', [
@@ -56,6 +64,26 @@ export const employees = pgTable(
 );
 
 export type EmployeeRow = typeof employees.$inferSelect;
+
+/**
+ * Mitarbeiterfoto (Anzeigebild) für die Terminal-Begrüßung. Ein Bild je
+ * Mitarbeitendem, mandantengetrennt (RLS). Es handelt sich um ein einfaches
+ * Porträt – KEINE biometrischen Daten (Fingerabdruck bleibt gerätelokal,
+ * ADR-0015). Löschung erfolgt mit dem Mitarbeitenden bzw. per Retention
+ * (Kern-Invariante 4).
+ */
+export const employeePhotos = pgTable(
+  'employee_photos',
+  {
+    employeeId: uuid('employee_id').primaryKey(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    contentType: varchar('content_type', { length: 100 }).notNull(),
+    data: bytea('data').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('employee_photos_tenant_idx').on(t.tenantId)],
+);
+export type EmployeePhotoRow = typeof employeePhotos.$inferSelect;
 
 /**
  * Zeiteintraege. Append-only: eine Korrektur erzeugt eine NEUE Revision mit

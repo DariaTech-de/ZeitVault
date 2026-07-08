@@ -4,7 +4,6 @@ import { useCallback, useEffect, useState } from 'react';
 import { MessageStrip } from '@/components/fiori/message-strip';
 import { StatusPill } from '@/components/fiori/status-pill';
 import {
-  Avatar,
   Button,
   Empty,
   ErrorNote,
@@ -15,6 +14,7 @@ import {
   Row,
   Worklist,
 } from '@/components/fiori/ui';
+import { EmployeePhotoAvatar, EmployeePhotoEditor } from '@/components/employee-photo';
 import { type DayListing, type EmployeeSummary, fetchDayEvents, fetchEmployees, postCorrection } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 
@@ -31,19 +31,15 @@ function formatTime(iso: string): string {
 function formatMinutes(total: number): string {
   return `${Math.floor(total / 60)}:${String(Math.round(total % 60)).padStart(2, '0')} h`;
 }
-function initials(name: string): string {
-  const p = name.split(' ');
-  return ((p[0]?.[0] ?? '') + (p[1]?.[0] ?? '')).toUpperCase();
-}
-
 export function AdminConsole() {
   const { identity } = useAuth();
   const [employees, setEmployees] = useState<EmployeeSummary[]>([]);
   const [selected, setSelected] = useState<string | null>(null);
   const [day, setDay] = useState<DayListing | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [photoRefresh, setPhotoRefresh] = useState(0);
 
-  useEffect(() => {
+  const loadEmployees = useCallback(() => {
     if (!identity) return;
     fetchEmployees(identity)
       .then((list) => {
@@ -52,6 +48,15 @@ export function AdminConsole() {
       })
       .catch(() => setError('Mitarbeitende konnten nicht geladen werden (Admin-Rolle nötig; API erreichbar?).'));
   }, [identity]);
+
+  useEffect(() => {
+    loadEmployees();
+  }, [loadEmployees]);
+
+  const onPhotoChanged = useCallback(() => {
+    setPhotoRefresh((k) => k + 1);
+    loadEmployees();
+  }, [loadEmployees]);
 
   const loadDay = useCallback(
     async (employeeId: string) => {
@@ -101,7 +106,7 @@ export function AdminConsole() {
           ) : (
             employees.map((emp) => (
               <Row key={emp.id} selected={selected === emp.id} onClick={() => void loadDay(emp.id)}>
-                <Avatar>{initials(emp.displayName)}</Avatar>
+                {identity && <EmployeePhotoAvatar identity={identity} employee={emp} size={36} refreshKey={photoRefresh} />}
                 <span className="min-w-0 flex-1">
                   <span className="block font-semibold">{emp.displayName}</span>
                   <span className="mono block text-[12px] text-ink-faint">Pers.-Nr. {emp.personnelNumber}</span>
@@ -130,6 +135,11 @@ export function AdminConsole() {
                     <StatusPill tone="positive">konform</StatusPill>
                   )}
                 </div>
+                {identity && selectedEmp && (
+                  <div className="mt-4 border-t border-line pt-4">
+                    <EmployeePhotoEditor identity={identity} employee={selectedEmp} onChanged={onPhotoChanged} />
+                  </div>
+                )}
               </ObjectHeader>
               <Facets>
                 <Facet k="Gearbeitet" v={<span className="mono">{formatMinutes(day.status.workedMinutes)}</span>} />

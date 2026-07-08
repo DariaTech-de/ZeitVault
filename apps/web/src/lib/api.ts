@@ -43,6 +43,7 @@ export interface EmployeeSummary {
   id: string;
   personnelNumber: string;
   displayName: string;
+  hasPhoto?: boolean;
 }
 
 async function request<T>(identity: Identity, path: string, init?: RequestInit): Promise<T> {
@@ -250,6 +251,32 @@ export function createEmployee(
   });
 }
 
+/** Mitarbeiterfoto setzen/ersetzen (Base64, z. B. nach clientseitigem Zuschnitt). */
+export function uploadEmployeePhoto(
+  identity: Identity,
+  employeeId: string,
+  input: { contentType: string; dataBase64: string },
+): Promise<{ ok: true }> {
+  return request(identity, `/api/admin/employees/${employeeId}/photo`, {
+    method: 'PUT',
+    body: JSON.stringify(input),
+  });
+}
+
+/** Mitarbeiterfoto als Object-URL laden (Auth-Header, daher via fetch/Blob). */
+export async function fetchEmployeePhotoUrl(identity: Identity, employeeId: string): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/api/admin/employees/${employeeId}/photo`, {
+    headers: authHeaders(identity),
+    cache: 'no-store',
+  });
+  if (!res.ok) return null;
+  return URL.createObjectURL(await res.blob());
+}
+
+export function deleteEmployeePhoto(identity: Identity, employeeId: string): Promise<{ ok: true }> {
+  return request(identity, `/api/admin/employees/${employeeId}/photo`, { method: 'DELETE' });
+}
+
 export type LocationCheck = 'not_required' | 'inside' | 'outside' | 'no_signal';
 
 export interface GeofenceSite {
@@ -343,29 +370,66 @@ export function mapNfc(identity: Identity, input: { uid: string; employeeId: str
 }
 
 export interface TerminalStampResult {
+  employeeId: string;
   employeeName: string;
   personnelNumber: string;
+  hasPhoto: boolean;
   kind: string;
   state: 'out' | 'in' | 'break';
   occurredAt: string;
 }
 
-/** Kiosk-Stempel am Terminal (Geräte-Token statt Nutzer-Login). */
-export async function kioskStamp(
-  deviceToken: string,
-  input: { nfcUid?: string; employeeId?: string; kind?: string },
-): Promise<TerminalStampResult> {
-  const res = await fetch(`${API_BASE}/api/kiosk/stamp`, {
+export interface KioskIdentifyResult {
+  employeeId: string;
+  employeeName: string;
+  personnelNumber: string;
+  hasPhoto: boolean;
+  state: 'out' | 'in' | 'break';
+  suggestedKind: string;
+}
+
+/** Identifizierung am Terminal (genau eines: nfcUid | personnelNumber | employeeId). */
+type KioskIdentifier = { nfcUid?: string; personnelNumber?: string; employeeId?: string };
+
+async function kioskPost<T>(deviceToken: string, path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${API_BASE}/api/kiosk/${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'x-terminal-token': deviceToken },
-    body: JSON.stringify(input),
+    body: JSON.stringify(body),
     cache: 'no-store',
   });
   if (!res.ok) {
     const detail = await res.text();
-    throw new Error(`HTTP ${res.status}: ${detail}`);
+    throw new Error(`HTTP ${res.status}: ${detail.replace(/^\{.*"message":"?/, '').slice(0, 200)}`);
   }
-  return res.json() as Promise<TerminalStampResult>;
+  return res.json() as Promise<T>;
+}
+
+/** Person am Terminal identifizieren (Foto/Name/Status), ohne zu stempeln. */
+export function kioskIdentify(deviceToken: string, input: KioskIdentifier): Promise<KioskIdentifyResult> {
+  return kioskPost<KioskIdentifyResult>(deviceToken, 'identify', input);
+}
+
+/** Kiosk-Stempel am Terminal (Geräte-Token statt Nutzer-Login). */
+export function kioskStamp(
+  deviceToken: string,
+  input: KioskIdentifier & { kind?: string },
+): Promise<TerminalStampResult> {
+  return kioskPost<TerminalStampResult>(deviceToken, 'stamp', input);
+}
+
+/**
+ * Lädt das Mitarbeiterfoto am Terminal als Object-URL (Geräte-Token im Header,
+ * daher nicht direkt als <img src> nutzbar). Aufrufer muss die URL bei Bedarf
+ * per URL.revokeObjectURL freigeben.
+ */
+export async function fetchKioskPhotoUrl(deviceToken: string, employeeId: string): Promise<string | null> {
+  const res = await fetch(`${API_BASE}/api/kiosk/employee/${employeeId}/photo`, {
+    headers: { 'x-terminal-token': deviceToken },
+    cache: 'no-store',
+  });
+  if (!res.ok) return null;
+  return URL.createObjectURL(await res.blob());
 }
 
 export interface ViolationEntry {

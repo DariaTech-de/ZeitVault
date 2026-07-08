@@ -24,21 +24,61 @@ export const mapNfcSchema = z.object({
 });
 export type MapNfc = z.infer<typeof mapNfcSchema>;
 
+/** Genau eine Identifizierungsquelle: NFC-Chip, Personalnummer oder (lokal am
+ * Terminal aufgelöster) Fingerabdruck -> Mitarbeiter-ID. */
+function exactlyOneIdentifier(v: { nfcUid?: string; personnelNumber?: string; employeeId?: string }): boolean {
+  return [v.nfcUid, v.personnelNumber, v.employeeId].filter(Boolean).length === 1;
+}
+const IDENTIFIER_MSG = 'Genau eines von nfcUid, personnelNumber oder employeeId ist erforderlich.';
+
 /**
- * Stempelvorgang vom Terminal. Entweder `nfcUid` (NFC-Chip) ODER `employeeId`
- * (Fingerabdruck lokal am Terminal aufgelöst). `kind` ist optional; ohne Angabe
- * wählt der Server automatisch die nächste sinnvolle Aktion (Kommen/Gehen).
+ * Stempelvorgang vom Terminal. Genau EINE Identifizierung: `nfcUid` (NFC-Chip),
+ * `personnelNumber` (Tastatureingabe) ODER `employeeId` (Fingerabdruck lokal am
+ * Terminal aufgelöst). `kind` ist optional; ohne Angabe wählt der Server
+ * automatisch die nächste sinnvolle Aktion (Kommen/Gehen/Pause-Ende).
  */
 export const terminalStampSchema = z
   .object({
     nfcUid: z.string().min(2).max(128).optional(),
+    personnelNumber: z.string().min(1).max(64).optional(),
     employeeId: uuidSchema.optional(),
     kind: stampKindSchema.optional(),
   })
-  .refine((v) => Boolean(v.nfcUid) !== Boolean(v.employeeId), {
-    message: 'Genau eines von nfcUid oder employeeId ist erforderlich.',
-  });
+  .refine(exactlyOneIdentifier, { message: IDENTIFIER_MSG });
 export type TerminalStamp = z.infer<typeof terminalStampSchema>;
+
+/** Identifizierung am Terminal OHNE zu stempeln (zeigt Foto/Name/Status an). */
+export const kioskIdentifySchema = z
+  .object({
+    nfcUid: z.string().min(2).max(128).optional(),
+    personnelNumber: z.string().min(1).max(64).optional(),
+    employeeId: uuidSchema.optional(),
+  })
+  .refine(exactlyOneIdentifier, { message: IDENTIFIER_MSG });
+export type KioskIdentify = z.infer<typeof kioskIdentifySchema>;
+
+/** Antwort der Identifizierung: Anzeige der Person vor dem Stempeln. */
+export interface KioskIdentifyResult {
+  employeeId: string;
+  employeeName: string;
+  personnelNumber: string;
+  hasPhoto: boolean;
+  /** Aktueller Anwesenheitsstatus (für die Auswahl Kommen/Gehen/Pause). */
+  state: 'out' | 'in' | 'break';
+  /** Vom Server vorgeschlagene nächste Aktion. */
+  suggestedKind: z.infer<typeof stampKindSchema>;
+}
+
+/** Grenzen für Mitarbeiterfotos (Anzeigebild, kein Rohbild-Upload beliebiger Größe). */
+export const PHOTO_MAX_BYTES = 2 * 1024 * 1024; // 2 MiB
+export const PHOTO_CONTENT_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const;
+
+/** Upload eines Mitarbeiterfotos (Base64), z. B. nach clientseitigem Zuschnitt. */
+export const employeePhotoUploadSchema = z.object({
+  contentType: z.enum(PHOTO_CONTENT_TYPES),
+  dataBase64: z.string().min(1),
+});
+export type EmployeePhotoUpload = z.infer<typeof employeePhotoUploadSchema>;
 
 export interface TerminalSummary {
   id: string;
@@ -57,8 +97,10 @@ export interface NfcMapping {
 
 /** Antwort an das Terminal nach einem Stempelvorgang (für die Anzeige). */
 export interface TerminalStampResult {
+  employeeId: string;
   employeeName: string;
   personnelNumber: string;
+  hasPhoto: boolean;
   kind: string;
   state: 'out' | 'in' | 'break';
   occurredAt: string;

@@ -27,6 +27,8 @@ export const auditActionSchema = z.enum([
   'retention.purge',
   'permission.change',
   'employee.create',
+  'employee.photo.set',
+  'employee.photo.delete',
   'license.activate',
   'geofence.configure',
   'stamp.flag',
