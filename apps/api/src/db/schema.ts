@@ -150,6 +150,13 @@ export const stampEvents = pgTable(
     locationCheck: locationCheck('location_check').notNull().default('not_required'),
     locationSiteId: uuid('location_site_id'),
     locationDistanceM: integer('location_distance_m'),
+    // Einsatzort-Uebersteuerung fuer diesen Stempel (ADR-0016); NULL = der zum
+    // Zeitpunkt gueltige Standard-Einsatzort des Mitarbeitenden.
+    workLocationId: uuid('work_location_id'),
+    // Nacherfassung (A-03): Eintraege > 24 h nach der Arbeitsleistung werden
+    // dauerhaft markiert und tragen eine Pflicht-Begruendung.
+    lateEntry: boolean('late_entry').notNull().default(false),
+    lateReason: text('late_reason'),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
@@ -160,6 +167,48 @@ export const stampEvents = pgTable(
 
 export type StampEventRow = typeof stampEvents.$inferSelect;
 export type NewStampEventRow = typeof stampEvents.$inferInsert;
+
+/**
+ * Einsatzorte (ADR-0016): Ort der Arbeitsstaette mit Bundesland, optionalem
+ * Gemeindeschluessel (AGS) und IANA-Zeitzone. Die Bewertung (Tagesgrenzen,
+ * Feiertage) erfolgt gegen den aufgeloesten Einsatzort (K-01/K-06/C-08).
+ */
+export const workLocations = pgTable(
+  'work_locations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    name: varchar('name', { length: 200 }).notNull(),
+    countryCode: varchar('country_code', { length: 2 }).notNull().default('DE'),
+    stateCode: varchar('state_code', { length: 8 }),
+    municipalityCode: varchar('municipality_code', { length: 16 }),
+    timeZone: varchar('time_zone', { length: 64 }).notNull(),
+    isDefault: boolean('is_default').notNull().default(false),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('work_locations_tenant_idx').on(t.tenantId)],
+);
+export type WorkLocationRow = typeof workLocations.$inferSelect;
+
+/** Standard-Einsatzort je Mitarbeitendem mit Gueltigkeitshistorie (ADR-0016). */
+export const employeeWorkLocations = pgTable(
+  'employee_work_locations',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    workLocationId: uuid('work_location_id').notNull(),
+    validFrom: date('valid_from').notNull(),
+    validTo: date('valid_to'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('employee_work_locations_tenant_idx').on(t.tenantId),
+    index('employee_work_locations_employee_idx').on(t.tenantId, t.employeeId, t.validFrom),
+  ],
+);
+export type EmployeeWorkLocationRow = typeof employeeWorkLocations.$inferSelect;
 
 /** Mandanteneinstellung Geofencing (Default AUS, Kern-Invariante 5). */
 export const geofenceSettings = pgTable('geofence_settings', {

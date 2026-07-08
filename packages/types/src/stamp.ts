@@ -17,6 +17,12 @@ export const stampSchema = z.object({
   employeeId: uuidSchema,
   source: stampSourceSchema.default('web'),
   occurredAt: isoTimestampSchema.optional(),
+  // Nacherfassung (A-03): liegt occurredAt mehr als 24 h zurueck, ist eine
+  // Begruendung PFLICHT; der Eintrag wird dauerhaft als late_entry markiert.
+  reason: z.string().min(3).max(500).optional(),
+  // Einsatzort-Uebersteuerung fuer diesen Stempel (ADR-0016); ohne Angabe gilt
+  // der zum Zeitpunkt gueltige Standard-Einsatzort des Mitarbeitenden.
+  workLocationId: uuidSchema.optional(),
   // Optionale Position (nur wenn Geofencing aktiviert ist, ADR-0014). GPS ist
   // standardmaessig aus (Kern-Invariante 5); die App sendet nichts ungefragt.
   location: stampLocationSchema.optional(),

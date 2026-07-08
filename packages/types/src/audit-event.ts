@@ -34,6 +34,10 @@ export const auditActionSchema = z.enum([
   'stamp.flag',
   'terminal.register',
   'nfc.map',
+  'work_location.create',
+  'work_location.deactivate',
+  'employee.work_location.assign',
+  'work_time_model.create',
 ]);
 export type AuditAction = z.infer<typeof auditActionSchema>;
 

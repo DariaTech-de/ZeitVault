@@ -17,3 +17,4 @@ export * from './license';
 export * from './employee';
 export * from './geofence';
 export * from './terminal';
+export * from './work-location';

@@ -19,6 +19,7 @@ import { RetentionModule } from './retention/retention.module';
 import { StampingModule } from './stamping/stamping.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { TimeModule } from './time/time.module';
+import { WorkLocationModule } from './work-location/work-location.module';
 import { WorkTimeModule } from './work-time/work-time.module';
 
 /**
@@ -48,6 +49,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     LicensingModule,
     GeofenceModule,
     TerminalModule,
+    WorkLocationModule,
   ],
 })
 export class AppModule {}
