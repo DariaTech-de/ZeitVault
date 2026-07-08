@@ -21,6 +21,7 @@ import { TenantGuard } from '../common/tenant.guard';
 import type { EmployeeRow } from '../db/schema';
 import { decodePhotoUpload } from '../media/photo';
 import { AdminService, type EmployeeSummary } from './admin.service';
+import { type DashboardData, DashboardService } from './dashboard.service';
 
 const uuidSchema = z.string().uuid();
 
@@ -32,6 +33,7 @@ export class AdminController {
   constructor(
     private readonly tenantContext: TenantContextService,
     private readonly admin: AdminService,
+    private readonly dashboard: DashboardService,
   ) {}
 
   /** Beispiel-Endpunkt ausschliesslich fuer Administratoren (RBAC-Nachweis). */
@@ -40,6 +42,13 @@ export class AdminController {
   overview(): { tenantId: string; roles: string[] } {
     const ctx = this.tenantContext.require();
     return { tenantId: ctx.tenantId, roles: ctx.roles };
+  }
+
+  /** Aggregierte Kennzahlen für das Dashboard (Vorgesetzte/Administration). */
+  @Get('dashboard')
+  @Roles('manager', 'admin')
+  async getDashboard(): Promise<DashboardData> {
+    return this.dashboard.getDashboard();
   }
 
   /** Mitarbeitende des Mandanten (nur Administration). */

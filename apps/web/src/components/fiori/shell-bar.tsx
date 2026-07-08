@@ -20,6 +20,7 @@ const CORE: NavItem[] = [
   { href: '/konten', label: 'Konten' },
 ];
 const ADMIN: NavItem[] = [
+  { href: '/admin/dashboard', label: 'Dashboard' },
   { href: '/admin', label: 'Übersicht' },
   { href: '/admin/auswertungen', label: 'Auswertungen' },
   { href: '/admin/standort', label: 'Standort' },

@@ -90,6 +90,27 @@ export function fetchEmployees(identity: Identity): Promise<EmployeeSummary[]> {
   return request(identity, '/api/admin/employees');
 }
 
+export interface DashboardData {
+  generatedAt: string;
+  kpis: { employees: number; presentNow: number; pendingApprovals: number; weekMinutes: number };
+  activity: { date: string; minutes: number }[];
+  recentStamps: {
+    employeeId: string;
+    employeeName: string;
+    hasPhoto: boolean;
+    kind: string;
+    occurredAt: string;
+    source: string;
+  }[];
+  recentBookings: { employeeName: string; projectName: string; minutes: number; workDate: string }[];
+  projects: { id: string; name: string; bookedMinutes: number }[];
+}
+
+/** Aggregierte Kennzahlen fürs Admin-Dashboard (Vorgesetzte/Administration). */
+export function fetchDashboard(identity: Identity): Promise<DashboardData> {
+  return request(identity, '/api/admin/dashboard');
+}
+
 export function fetchDayEvents(identity: Identity, employeeId: string): Promise<DayListing> {
   return request(identity, `/api/stamp/events?employeeId=${encodeURIComponent(employeeId)}`);
 }
