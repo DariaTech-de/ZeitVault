@@ -9,13 +9,22 @@ import type {
 
 const MINUTE_MS = 60_000;
 
-/** Dauer eines Intervalls in Minuten. Wirft bei ungueltigem Intervall. */
+/**
+ * Dauer eines Intervalls in GANZEN Minuten. Wirft bei ungueltigem Intervall.
+ *
+ * B-12-Basis (BL-6): Zeitdauern sind niemals Bruchminuten (Float). Die
+ * Ableitung Sekunden -> Minuten ist eine explizite Rundungsregel; Standard ist
+ * die kaufmaennische Rundung je Intervall. Die mandantenweite Konfiguration
+ * des Rundungsmodus folgt mit B-12 (Schnitt 3); gerundet wird hier bei der
+ * ABLEITUNG der Dauer, nicht nach der Bewertung ("erst bewerten, dann runden"
+ * bezieht sich auf Betraege/Lohnarten, nicht auf die Basiseinheit Minute).
+ */
 export function intervalMinutes(interval: WorkInterval | BreakInterval): number {
   const ms = interval.end.getTime() - interval.start.getTime();
   if (Number.isNaN(ms) || ms < 0) {
     throw new Error('Ungueltiges Intervall: Ende liegt vor Beginn oder Datum ungueltig.');
   }
-  return ms / MINUTE_MS;
+  return Math.round(ms / MINUTE_MS);
 }
 
 /** Summe der Dauer mehrerer Intervalle in Minuten. */

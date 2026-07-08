@@ -39,6 +39,23 @@ describe('intervalMinutes', () => {
       intervalMinutes({ start: d('2026-06-26T12:00:00Z'), end: d('2026-06-26T08:00:00Z') }),
     ).toThrow();
   });
+
+  // B-12-Basis (BL-6): Zeitdauern sind IMMER ganze Minuten. Die Ableitung
+  // Sekunden -> Minuten ist eine explizite Rundungsregel (Standard:
+  // kaufmaennisch je Intervall); die mandantenweite Konfiguration folgt mit
+  // B-12. Niemals Bruchminuten (Float) in der Bewertung.
+  it('rundet Sekunden kaufmaennisch auf ganze Minuten (nie Bruchminuten)', () => {
+    const base = '2026-06-26T08:00:';
+    expect(intervalMinutes({ start: d(`${base}00Z`), end: d('2026-06-26T08:00:29Z') })).toBe(0);
+    expect(intervalMinutes({ start: d(`${base}00Z`), end: d('2026-06-26T08:00:30Z') })).toBe(1);
+    expect(intervalMinutes({ start: d(`${base}00Z`), end: d('2026-06-26T08:10:29Z') })).toBe(10);
+    expect(intervalMinutes({ start: d(`${base}00Z`), end: d('2026-06-26T08:10:30Z') })).toBe(11);
+    expect(
+      Number.isInteger(
+        intervalMinutes({ start: d(`${base}17Z`), end: d('2026-06-26T09:23:41Z') }),
+      ),
+    ).toBe(true);
+  });
 });
 
 describe('totalMinutes', () => {
