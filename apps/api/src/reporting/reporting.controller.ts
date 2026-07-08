@@ -8,6 +8,7 @@ import {
   type AveragingEntry,
   type BalanceListEntry,
   ReportingService,
+  type SundayRestEntry,
   type Timesheet,
   type ViolationEntry,
 } from './reporting.service';
@@ -44,6 +45,13 @@ export class ReportingController {
   }
 
   /** Saldenliste aller Mitarbeitenden (nur Vorgesetzte/Administration). */
+  /** Sonn-/Feiertagsruhe B-06 (Ersatzruhetag-Fristen, freie Sonntage). */
+  @Get('sunday-rest')
+  @Roles('manager', 'admin')
+  async sundayRest(@Query('year') year: string): Promise<SundayRestEntry[]> {
+    return this.reporting.sundayRestReport(z.coerce.number().int().min(2000).max(2100).parse(year));
+  }
+
   /** Durchschnittspruefung B-01/B-04 zum Stichtag (rueckblickendes Fenster). */
   @Get('averaging')
   @Roles('manager', 'admin')

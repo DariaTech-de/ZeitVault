@@ -85,6 +85,10 @@ export interface ArbZgRuleParams {
   /** Kuerzere Ausgleichsperiode fuer Nachtarbeitnehmer (B-04, § 6 Abs. 2). */
   nightWorkerAveragingPeriodMonths: number;
   nightWorkerAveragingPeriodWeeks: number;
+  /** Sonn-/Feiertagsruhe (B-06, §§ 9-11 ArbZG). */
+  minFreeSundaysPerYear: number;
+  sundayCompensationDays: number;
+  holidayCompensationDays: number;
   /**
    * Zulaessiges Beschaeftigungsfenster (Wanduhr-Minuten, lokal): ausserhalb
    * liegender Arbeitsanteil ist ein Verstoss. Erwachsene: 0/1440 (keine
@@ -139,6 +143,11 @@ export type FindingCode =
   | 'AVERAGING_LIMIT_EXCEEDED'
   | 'REST_COMPENSATION_MISSING'
   | 'REST_COMPENSATION_PENDING'
+  | 'SUNDAY_COMPENSATION_MISSING'
+  | 'SUNDAY_COMPENSATION_PENDING'
+  | 'HOLIDAY_COMPENSATION_MISSING'
+  | 'HOLIDAY_COMPENSATION_PENDING'
+  | 'MIN_FREE_SUNDAYS_UNREACHABLE'
   | 'WORK_OUTSIDE_ALLOWED_WINDOW'
   | 'SHIFT_UNRESOLVED';
 

@@ -7,6 +7,7 @@ export * from './arbzg/weekly';
 export * from './arbzg/work-window';
 export * from './arbzg/averaging';
 export * from './arbzg/rest-compensation';
+export * from './arbzg/sunday-rest';
 export * from './stamping/types';
 export * from './stamping/fold';
 export * from './stamping/shifts';

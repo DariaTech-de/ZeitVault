@@ -8,12 +8,15 @@ import {
   buildAccountingDays,
   computeBalances,
   evaluateRestCompensation,
+  evaluateSundayHolidayRest,
   evaluateWeeklyWorkTime,
   evaluateWorkingTimeAverage,
   foldShifts,
+  isGermanHoliday,
   restPeriodsFromShifts,
   trimLeadingWindowCut,
 } from '@zeitvault/domain';
+import type { Bundesland } from '@zeitvault/domain';
 import { TenantContextService } from '../common/tenant-context.service';
 import {
   type AccountTransactionRow,
@@ -73,6 +76,14 @@ export interface Timesheet {
 }
 
 export interface ViolationEntry {
+  employeeId: string;
+  displayName: string;
+  date: string;
+  findings: Finding[];
+}
+
+/** Sonn-/Feiertagsruhe-Report (B-06) je Mitarbeitendem. */
+export interface SundayRestEntry {
   employeeId: string;
   displayName: string;
   date: string;
@@ -193,6 +204,72 @@ export class ReportingService {
       ).filter((r) => r.date >= from && r.date <= to);
       for (const r of restFindings) {
         entries.push({ employeeId, displayName, date: r.date, findings: [r.finding] });
+      }
+    }
+    return entries.sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? -1 : 1));
+  }
+
+  /**
+   * Sonn-/Feiertagsruhe (B-06, §§ 9-11 ArbZG) fuer ein Kalenderjahr:
+   * beschaeftigungsfreie Sonntage, Ersatzruhetag-Fristen mit Warnung VOR
+   * Fristablauf. Feiertage einsatzortscharf (Bundesland, C-08).
+   */
+  async sundayRestReport(year: number): Promise<SundayRestEntry[]> {
+    const ctx = this.tenantContext.require();
+    const from = `${year}-01-01`;
+    const to = `${year}-12-31`;
+    const activeRuleSets = await this.rules.loadActiveRuleSets();
+    const memberships = await this.rules.loadGroupMemberships();
+    const birthDates = await this.rules.loadBirthDates();
+
+    const { rows, names } = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      const base = await tx
+        .select()
+        .from(stampEvents)
+        .where(and(eq(stampEvents.tenantId, ctx.tenantId), rangeWhere(stampEvents.occurredAt, from, to)))
+        .orderBy(asc(stampEvents.occurredAt));
+      const stamps = await closeOverCorrections(base, stampCorrectorFetcher(tx, ctx.tenantId));
+      const emps = await tx.select().from(employees).where(eq(employees.tenantId, ctx.tenantId));
+      return { rows: stamps, names: new Map(emps.map((e) => [e.id, e.displayName])) };
+    });
+    const byEmployee = new Map<string, StampEventRow[]>();
+    for (const row of rows) {
+      const bucket = byEmployee.get(row.employeeId) ?? [];
+      bucket.push(row);
+      byEmployee.set(row.employeeId, bucket);
+    }
+
+    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const entries: SundayRestEntry[] = [];
+    for (const [employeeId, empRows] of byEmployee) {
+      const displayName = names.get(employeeId);
+      if (!displayName) continue;
+      const resolved = await this.workLocations.resolve(employeeId, from);
+      const packageFor = this.rules.buildResolver(
+        this.rules.sourcesFor(activeRuleSets, employeeId, memberships),
+        birthDates.get(employeeId) ?? null,
+      );
+      const rangeEnd = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + RANGE_PAD_MS);
+      const materializeAt = now.getTime() < rangeEnd.getTime() ? now : rangeEnd;
+      const days = buildAccountingDays(
+        empRows.map(toStampEvent),
+        resolved.timeZone,
+        packageFor,
+        materializeAt,
+      ).filter((d) => d.date >= from && d.date <= to);
+      const land = resolved.countryCode === 'DE' ? (resolved.stateCode as Bundesland | null) : null;
+      const isHoliday = (date: string): boolean =>
+        land !== null && isGermanHoliday(date, land);
+      const findings = evaluateSundayHolidayRest(
+        days.map((d) => ({ date: d.date, workedMinutes: d.workedMinutes })),
+        isHoliday,
+        packageFor,
+        today,
+      );
+      for (const f of findings) {
+        entries.push({ employeeId, displayName, date: f.date, findings: [f.finding] });
       }
     }
     return entries.sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? -1 : 1));
