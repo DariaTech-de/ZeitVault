@@ -142,6 +142,9 @@ Nicht-triviale Entscheidungen werden als ADR dokumentiert (relative Links in Cro
 - [`docs/adr/0013-lizenzierung-pro-mitarbeiter.md`](docs/adr/0013-lizenzierung-pro-mitarbeiter.md) – Lizenzierung pro Mitarbeiter (signierte Sitzplätze, offline)
 - [`docs/adr/0014-standort-pruefung-geofence-opt-in.md`](docs/adr/0014-standort-pruefung-geofence-opt-in.md) – Standort-Prüfung/Geofencing (standardmäßig aus, Opt-in)
 - [`docs/adr/0015-terminal-nfc-fingerprint.md`](docs/adr/0015-terminal-nfc-fingerprint.md) – Terminal (NFC/Fingerabdruck), keine Server-Biometrie
+- [`docs/adr/0016-einsatzort-work-location.md`](docs/adr/0016-einsatzort-work-location.md) – Einsatzort als Entität (work_location), Übersteuerung je Zeiteintrag, Bewertungs-Snapshot
+- [`docs/adr/0017-stamp-events-als-ereignisquelle.md`](docs/adr/0017-stamp-events-als-ereignisquelle.md) – stamp_events als einzige Ereignisquelle, time_entries als deterministische Projektion
+- [`docs/adr/0018-abrechnungstag-vs-zeitscheiben.md`](docs/adr/0018-abrechnungstag-vs-zeitscheiben.md) – Abrechnungstag (accounting_day) getrennt von minutengenauer Zeitscheiben-Splittung
 
 Einheitliches ADR-Format (Überschriften exakt):
 
