@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
   assertValidTimeZone,
@@ -90,6 +91,67 @@ describe('sliceIntervalByLocalDay', () => {
       'Europe/Berlin',
     );
     expect(slices).toEqual([{ date: '2026-07-06', startMinute: 8 * 60, minutes: 240 }]);
+  });
+});
+
+// Summeninvariante (B-12): Die Splittung darf KEINE eigene Rundung beitragen.
+// Gerundet wird die Gesamtdauer eines Intervalls genau einmal; die Slice-
+// Minuten werden aus gerundeten KUMULIERTEN Grenzen abgeleitet, sodass
+// Sum(Slices) == gerundete Gesamtdauer fuer beliebige (sekunden-/millisekunden-
+// genaue) Stempel gilt. Je Scheibe einzeln zu runden waere eine systematische
+// Rundung ueber Zwischengrenzen (Mitternacht, spaeter Paragraf-3b-Fenster) und
+// wuerde mit der Nachtarbeit korrelieren.
+describe('sliceIntervalByLocalDay: Summeninvariante bei sekundengenauen Stempeln', () => {
+  const totalOf = (startIso: string, endIso: string, tz: string) => {
+    const start = d(startIso);
+    const end = d(endIso);
+    const total = Math.round((end.getTime() - start.getTime()) / 60_000);
+    const slices = sliceIntervalByLocalDay({ start, end }, tz);
+    return { total, slices, sum: slices.reduce((s, x) => s + x.minutes, 0) };
+  };
+
+  it('exakt 480 min ueber Mitternacht (Sekundenanteil) ergibt in Summe 480, nicht 481', () => {
+    const { total, sum } = totalOf('2026-01-15T22:00:30Z', '2026-01-16T06:00:30Z', 'Europe/Berlin');
+    expect(total).toBe(480);
+    expect(sum).toBe(480);
+  });
+
+  it('DST-Nacht mit Sekundenanteil: 420 min bleiben 420 (K-01)', () => {
+    const { total, sum } = totalOf('2026-03-28T21:00:30Z', '2026-03-29T04:00:30Z', 'Europe/Berlin');
+    expect(total).toBe(420);
+    expect(sum).toBe(420);
+  });
+
+  it('40 s ueber die lokale Mitternacht: die gezaehlte Minute geht nicht verloren', () => {
+    // lokal 23:59:40 -> 00:00:20 (Berlin, Winter): Gesamtdauer rundet auf 1 min.
+    const { total, sum } = totalOf('2026-01-15T22:59:40Z', '2026-01-15T23:00:20Z', 'Europe/Berlin');
+    expect(total).toBe(1);
+    expect(sum).toBe(1);
+  });
+
+  it('Property: Sum(Slice-Minuten) == gerundete Gesamtdauer, Slices lueckenlos und nicht negativ', () => {
+    const zones = ['Europe/Berlin', 'America/New_York', 'Asia/Kolkata', 'Pacific/Auckland'];
+    fc.assert(
+      fc.property(
+        // Beliebiger Beginn in 2025-2027, Dauer 0..72 h, Millisekunden-genau.
+        fc.integer({ min: Date.UTC(2025, 0, 1), max: Date.UTC(2027, 0, 1) }),
+        fc.integer({ min: 0, max: 72 * 60 * 60 * 1000 }),
+        fc.constantFrom(...zones),
+        (startMs, durationMs, tz) => {
+          const start = new Date(startMs);
+          const end = new Date(startMs + durationMs);
+          const slices = sliceIntervalByLocalDay({ start, end }, tz);
+          const sum = slices.reduce((s, x) => s + x.minutes, 0);
+          expect(sum).toBe(Math.round(durationMs / 60_000));
+          for (const s of slices) expect(s.minutes).toBeGreaterThanOrEqual(0);
+          // Tagesfolge ist strikt aufsteigend (jede lokale Tagesgrenze genau einmal).
+          for (let i = 1; i < slices.length; i += 1) {
+            expect(slices[i]!.date > slices[i - 1]!.date).toBe(true);
+          }
+        },
+      ),
+      { numRuns: 300 },
+    );
   });
 });
 

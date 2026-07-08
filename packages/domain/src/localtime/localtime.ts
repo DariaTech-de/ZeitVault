@@ -133,10 +133,19 @@ export function localDayStart(isoDate: string, timeZone: string): Date {
  * Teilt ein UTC-Intervall an lokalen Tagesgrenzen (kalendertaegliche Lesart,
  * K-03; Grundlage der Zuschlags-Splittung K-04). `minutes` je Slice sind
  * TATSAECHLICH verstrichene Minuten - ueber eine DST-Umstellung hinweg ergibt
- * die Summe daher 7 h bzw. 9 h statt 8 h (K-01). Hinweis fuer Verbraucher:
- * `startMinute + i` ist NICHT als Wanduhrzeit fortschreibbar, wenn innerhalb
- * des Slices eine Umstellung liegt; Zuschlags-Fensterpruefungen klassifizieren
- * je Instant (Schnitt 4).
+ * die Summe daher 7 h bzw. 9 h statt 8 h (K-01).
+ *
+ * Summeninvariante (B-12): Sum(Slice-Minuten) == intervalMinutes(interval),
+ * fuer beliebige sekundengenaue Stempel. Dafuer werden die Minuten aus
+ * gerundeten KUMULIERTEN Grenzen abgeleitet (round(bis Grenze) - round(bis
+ * Vorgrenze)); die Gesamtdauer wird also genau EINMAL gerundet, die Splittung
+ * selbst traegt keine eigene Rundung bei. Je Scheibe einzeln zu runden waere
+ * eine systematische, mit Nachtarbeit korrelierende Rundung (Tagesgrenzen und
+ * spaeter Paragraf-3b-Fenster erzeugen die Zwischengrenzen).
+ *
+ * Hinweis fuer Verbraucher: `startMinute + i` ist NICHT als Wanduhrzeit
+ * fortschreibbar, wenn innerhalb des Slices eine Umstellung liegt;
+ * Zuschlags-Fensterpruefungen klassifizieren je Instant (Schnitt 4).
  */
 export function sliceIntervalByLocalDay(interval: Interval, timeZone: string): LocalDaySlice[] {
   const startMs = interval.start.getTime();
@@ -146,18 +155,21 @@ export function sliceIntervalByLocalDay(interval: Interval, timeZone: string): L
   }
   const slices: LocalDaySlice[] = [];
   let cursor = startMs;
+  // Bereits vergebene Minuten (gerundete kumulierte Grenze bis zum Cursor).
+  let allocated = 0;
   // Begrenzung: ein Intervall ueberspannt praktisch nie > 62 Tage.
   for (let i = 0; i < 62 && cursor < endMs; i += 1) {
     const cursorDate = new Date(cursor);
     const date = localDateOf(cursorDate, timeZone);
     const nextMidnight = localDayStart(addIsoDays(date, 1), timeZone).getTime();
     const sliceEnd = Math.min(endMs, nextMidnight);
+    const cumulative = Math.round((sliceEnd - startMs) / MINUTE_MS);
     slices.push({
       date,
       startMinute: localMinuteOfDay(cursorDate, timeZone),
-      // Kaufmaennische Ableitung auf ganze Minuten (B-12-Basis, wie intervalMinutes).
-      minutes: Math.round((sliceEnd - cursor) / MINUTE_MS),
+      minutes: cumulative - allocated,
     });
+    allocated = cumulative;
     cursor = sliceEnd;
   }
   return slices;

@@ -13,11 +13,14 @@ const MINUTE_MS = 60_000;
  * Dauer eines Intervalls in GANZEN Minuten. Wirft bei ungueltigem Intervall.
  *
  * B-12-Basis (BL-6): Zeitdauern sind niemals Bruchminuten (Float). Die
- * Ableitung Sekunden -> Minuten ist eine explizite Rundungsregel; Standard ist
- * die kaufmaennische Rundung je Intervall. Die mandantenweite Konfiguration
- * des Rundungsmodus folgt mit B-12 (Schnitt 3); gerundet wird hier bei der
- * ABLEITUNG der Dauer, nicht nach der Bewertung ("erst bewerten, dann runden"
- * bezieht sich auf Betraege/Lohnarten, nicht auf die Basiseinheit Minute).
+ * MESSUNG eines Intervalls wird genau einmal kaufmaennisch auf ganze Minuten
+ * abgeleitet; wird ein Intervall an Zwischengrenzen zerteilt (lokale
+ * Mitternacht, spaeter Paragraf-3b-Fenster), leiten sich die Scheiben aus
+ * kumulierten Grenzen ab (sliceIntervalByLocalDay), sodass die Summe stets
+ * dieser einen Ableitung entspricht — die Splittung rundet nie selbst.
+ * Konfigurierbare RUNDUNG (Betriebsvereinbarung) setzt dagegen am EREIGNIS
+ * beim Eintragen an (roundStampTime, Standard 'none'); die mandantenweite
+ * Konfiguration folgt mit B-12 (Schnitt 3).
  */
 export function intervalMinutes(interval: WorkInterval | BreakInterval): number {
   const ms = interval.end.getTime() - interval.start.getTime();
