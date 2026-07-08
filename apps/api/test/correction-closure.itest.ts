@@ -9,6 +9,7 @@ import * as schema from '../src/db/schema';
 import type { Database } from '../src/db/tokens';
 import { GeofenceService } from '../src/geofence/geofence.service';
 import { ReportingService } from '../src/reporting/reporting.service';
+import { RuleResolutionService } from '../src/rules/rule-resolution.service';
 import { StampingService } from '../src/stamping/stamping.service';
 import { WorkLocationService } from '../src/work-location/work-location.service';
 import { makePool, runMigrations, withTenant } from './db';
@@ -40,9 +41,10 @@ beforeAll(async () => {
   tenantContext = new TenantContextService();
   const geofence = new GeofenceService(db, tenantContext, auditStub);
   workLocations = new WorkLocationService(db, tenantContext, auditStub);
-  stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations);
+  const rules = new RuleResolutionService(db, tenantContext);
+  stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations, rules);
   corrections = new CorrectionService(db, tenantContext, auditStub);
-  reporting = new ReportingService(db, tenantContext, workLocations);
+  reporting = new ReportingService(db, tenantContext, workLocations, rules);
 
   // Mandanten-Default-Einsatzort (Pflicht-Stammdatum).
   await asTenant(() =>

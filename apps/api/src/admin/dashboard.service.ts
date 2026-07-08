@@ -1,7 +1,6 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { and, asc, desc, eq, gte, sql } from 'drizzle-orm';
 import {
-  ARBZG_2026_V1,
   type StampEvent,
   StampTransitionError,
   addIsoDays,
@@ -23,6 +22,7 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { RuleResolutionService } from '../rules/rule-resolution.service';
 import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-window';
 import { WorkLocationService } from '../work-location/work-location.service';
 
@@ -55,6 +55,7 @@ export class DashboardService {
     @Inject(DB) private readonly db: Database,
     private readonly tenantContext: TenantContextService,
     private readonly workLocations: WorkLocationService,
+    private readonly rules: RuleResolutionService,
   ) {}
 
   /**
@@ -156,11 +157,16 @@ export class DashboardService {
     const activityMap = new Map<string, number>(windowDates.map((d) => [d, 0]));
     let weekMinutes = 0;
     let presentNow = 0;
+    const activeRuleSets = await this.rules.loadActiveRuleSets();
     for (const [employeeId, events] of byEmployee) {
       try {
         const tz = (await this.workLocations.resolve(employeeId, todayKey)).timeZone;
-        const days = buildAccountingDays(events, tz, ARBZG_2026_V1, now);
-        if (shiftState(foldShifts(events), now) !== 'out') presentNow += 1;
+        const packageFor = this.rules.buildResolver(
+          this.rules.sourcesFor(activeRuleSets, employeeId),
+        );
+        const days = buildAccountingDays(events, tz, packageFor, now);
+        const graceMs = packageFor(localDateOf(now, tz)).params.openShiftGraceMinutes * 60_000;
+        if (shiftState(foldShifts(events), now, graceMs) !== 'out') presentNow += 1;
         for (const day of days) {
           const current = activityMap.get(day.date);
           if (current !== undefined) activityMap.set(day.date, current + day.workedMinutes);

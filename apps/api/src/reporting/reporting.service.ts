@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { type SQL, and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 import {
-  ARBZG_2026_V1,
   type AccountBalance,
   type Finding,
   type StampEvent,
@@ -17,6 +16,7 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { type RulePackageResolver, RuleResolutionService } from '../rules/rule-resolution.service';
 import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-window';
 import { WorkLocationService } from '../work-location/work-location.service';
 
@@ -84,6 +84,7 @@ export class ReportingService {
     @Inject(DB) private readonly db: Database,
     private readonly tenantContext: TenantContextService,
     private readonly workLocations: WorkLocationService,
+    private readonly rules: RuleResolutionService,
   ) {}
 
   /** Stundenzettel: je Tag gearbeitete/pausierte Minuten und ArbZG-Befunde. */
@@ -107,7 +108,8 @@ export class ReportingService {
       return closeOverCorrections(base, stampCorrectorFetcher(tx, ctx.tenantId, employeeId));
     });
 
-    const days = await this.aggregateDays(employeeId, rows, from, to);
+    const packageFor = await this.rules.resolverFor(employeeId);
+    const days = await this.aggregateDays(employeeId, rows, from, to, packageFor);
     return {
       employeeId,
       from,
@@ -145,13 +147,15 @@ export class ReportingService {
     }
 
     const entries: ViolationEntry[] = [];
+    const activeRuleSets = await this.rules.loadActiveRuleSets();
     for (const [employeeId, empRows] of byEmployee) {
       const displayName = names.get(employeeId);
       // Nur reale Mitarbeitende: Stempel ohne zugehoerigen Mitarbeiterdatensatz
       // (z. B. Import-/Testartefakte) gehoeren nicht in den Verstoszreport und
       // wuerden sonst als rohe UUID erscheinen.
       if (!displayName) continue;
-      for (const day of await this.aggregateDays(employeeId, empRows, from, to)) {
+      const packageFor = this.rules.buildResolver(this.rules.sourcesFor(activeRuleSets, employeeId));
+      for (const day of await this.aggregateDays(employeeId, empRows, from, to, packageFor)) {
         if (day.findings.length > 0) {
           entries.push({ employeeId, displayName, date: day.date, findings: day.findings });
         }
@@ -211,6 +215,7 @@ export class ReportingService {
     rows: StampEventRow[],
     from: string,
     to: string,
+    packageFor: RulePackageResolver,
   ): Promise<TimesheetDay[]> {
     // Einsatzort-Zeitzone je Mitarbeitendem (Aufloesung zum Zeitraumbeginn;
     // unterjaehrige Zuordnungswechsel innerhalb des Zeitraums: Schnitt 4).
@@ -222,7 +227,7 @@ export class ReportingService {
     return buildAccountingDays(
       rows.map(toStampEvent),
       resolved.timeZone,
-      ARBZG_2026_V1,
+      packageFor,
       materializeAt,
     )
       .filter((day) => day.date >= from && day.date <= to)

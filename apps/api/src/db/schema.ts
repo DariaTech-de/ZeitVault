@@ -191,6 +191,67 @@ export const workLocations = pgTable(
 );
 export type WorkLocationRow = typeof workLocations.$inferSelect;
 
+// Regelschicht (Schnitt 2; B-08/B-09/B-10): Tarifvertrag/Betriebsvereinbarung
+// als referenzierbares Objekt und persistente, versionierte Regelsaetze.
+export const collectiveAgreements = pgTable(
+  'collective_agreements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    kind: varchar('kind', { length: 32 }).notNull().$type<'collective_agreement' | 'works_agreement'>(),
+    name: varchar('name', { length: 200 }).notNull(),
+    reference: varchar('reference', { length: 500 }),
+    basedOnId: uuid('based_on_id'),
+    validFrom: date('valid_from').notNull(),
+    validTo: date('valid_to'),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('collective_agreements_tenant_idx').on(t.tenantId)],
+);
+export type CollectiveAgreementRow = typeof collectiveAgreements.$inferSelect;
+
+export const ruleSets = pgTable(
+  'rule_sets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    name: varchar('name', { length: 200 }).notNull(),
+    layer: varchar('layer', { length: 32 })
+      .notNull()
+      .$type<'collective_agreement' | 'works_agreement' | 'individual'>(),
+    collectiveAgreementId: uuid('collective_agreement_id'),
+    employeeId: uuid('employee_id'),
+    validFrom: date('valid_from').notNull(),
+    validTo: date('valid_to'),
+    params: jsonb('params').notNull().$type<Record<string, number>>(),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('rule_sets_tenant_idx').on(t.tenantId, t.validFrom)],
+);
+export type RuleSetRow = typeof ruleSets.$inferSelect;
+
+export const reprocessingRuns = pgTable(
+  'reprocessing_runs',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    triggerKind: varchar('trigger_kind', { length: 32 })
+      .notNull()
+      .$type<'rule_set_change' | 'manual'>(),
+    ruleSetId: uuid('rule_set_id'),
+    fromDate: date('from_date').notNull(),
+    toDate: date('to_date').notNull(),
+    status: varchar('status', { length: 16 }).notNull().$type<'completed' | 'failed'>(),
+    summary: jsonb('summary').notNull().$type<Record<string, unknown>>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    finishedAt: timestamp('finished_at', { withTimezone: true }),
+  },
+  (t) => [index('reprocessing_runs_tenant_idx').on(t.tenantId, t.createdAt)],
+);
+export type ReprocessingRunRow = typeof reprocessingRuns.$inferSelect;
+
 /** Standard-Einsatzort je Mitarbeitendem mit Gueltigkeitshistorie (ADR-0016). */
 export const employeeWorkLocations = pgTable(
   'employee_work_locations',

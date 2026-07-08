@@ -1,7 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 import {
-  ARBZG_2026_V1,
   type DatevMapping,
   type PayrollAggregate,
   type PayrollCategory,
@@ -25,6 +24,7 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { RuleResolutionService } from '../rules/rule-resolution.service';
 import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-window';
 import { WorkLocationService } from '../work-location/work-location.service';
 import { type GobdRecord, checksum, serializeGobd } from './export.serialize';
@@ -80,6 +80,7 @@ export class ExportService {
     private readonly tenantContext: TenantContextService,
     private readonly audit: AuditClient,
     private readonly workLocations: WorkLocationService,
+    private readonly rules: RuleResolutionService,
   ) {}
 
   /**
@@ -263,9 +264,11 @@ export class ExportService {
     const nowTs = new Date();
     const materializeAt = nowTs.getTime() < rangeEnd.getTime() ? nowTs : rangeEnd;
     const workedByEmployee = new Map<string, number>();
+    const activeRuleSets = await this.rules.loadActiveRuleSets();
     for (const [employeeId, events] of byEmployee) {
       const tz = (await this.workLocations.resolve(employeeId, from)).timeZone;
-      const days = buildAccountingDays(events, tz, ARBZG_2026_V1, materializeAt).filter(
+      const packageFor = this.rules.buildResolver(this.rules.sourcesFor(activeRuleSets, employeeId));
+      const days = buildAccountingDays(events, tz, packageFor, materializeAt).filter(
         (d) => d.date >= from && d.date <= to,
       );
       // ADR-0019: Unaufgeloeste Schichten (Ende unbekannt) werden NICHT
@@ -274,9 +277,10 @@ export class ExportService {
       // solche Perioden zusaetzlich blockieren.
       let minutes = 0;
       for (const day of days) {
+        const graceMs = packageFor(day.date).params.openShiftGraceMinutes * 60_000;
         for (const shift of day.shifts) {
-          if (shiftResolution(shift, materializeAt) === 'unresolved') continue;
-          minutes += totalMinutes(materializeShift(shift, materializeAt).workIntervals);
+          if (shiftResolution(shift, materializeAt, graceMs) === 'unresolved') continue;
+          minutes += totalMinutes(materializeShift(shift, materializeAt, graceMs).workIntervals);
         }
       }
       if (minutes > 0) workedByEmployee.set(employeeId, minutes);

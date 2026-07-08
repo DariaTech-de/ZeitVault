@@ -18,3 +18,4 @@ export * from './employee';
 export * from './geofence';
 export * from './terminal';
 export * from './work-location';
+export * from './rule-set';

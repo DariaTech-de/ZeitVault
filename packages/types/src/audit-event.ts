@@ -38,6 +38,11 @@ export const auditActionSchema = z.enum([
   'work_location.deactivate',
   'employee.work_location.assign',
   'work_time_model.create',
+  'collective_agreement.create',
+  'collective_agreement.deactivate',
+  'rule_set.create',
+  'rule_set.deactivate',
+  'rules.reprocessing_run',
 ]);
 export type AuditAction = z.infer<typeof auditActionSchema>;
 

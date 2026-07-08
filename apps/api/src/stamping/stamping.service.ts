@@ -8,7 +8,6 @@ import {
 import { and, eq, sql } from 'drizzle-orm';
 import {
   type AccountingDay,
-  ARBZG_2026_V1,
   type Finding,
   type StampEvent,
   type StampKind,
@@ -25,6 +24,7 @@ import { TenantContextService } from '../common/tenant-context.service';
 import { type StampEventRow, stampEvents, workLocations } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
 import { GeofenceService } from '../geofence/geofence.service';
+import { type RulePackageResolver, RuleResolutionService } from '../rules/rule-resolution.service';
 import { WorkLocationService } from '../work-location/work-location.service';
 import { type Queryable, loadEmployeeEventWindow } from './event-window';
 
@@ -111,6 +111,7 @@ export class StampingService {
     private readonly audit: AuditClient,
     private readonly geofence: GeofenceService,
     private readonly workLocations: WorkLocationService,
+    private readonly rules: RuleResolutionService,
   ) {}
 
   /**
@@ -144,11 +145,19 @@ export class StampingService {
    * Referenz ist die Schicht, die den Zeitpunkt `ref` enthaelt; ausserhalb
    * jeder Schicht gilt der lokale Kalendertag von `ref`.
    */
-  private buildView(events: StampEvent[], timeZone: string, ref: Date, now: Date): DayView {
-    const days = buildAccountingDays(events, timeZone, ARBZG_2026_V1, now);
+  private buildView(
+    events: StampEvent[],
+    timeZone: string,
+    ref: Date,
+    now: Date,
+    packageFor: RulePackageResolver,
+  ): DayView {
+    const days = buildAccountingDays(events, timeZone, packageFor, now);
+    const graceMs = packageFor(localDateOf(now, timeZone)).params.openShiftGraceMinutes * 60_000;
     const state = shiftState(
       days.flatMap((d) => d.shifts),
       now,
+      graceMs,
     );
     const refMs = ref.getTime();
     let refDay =
@@ -272,7 +281,8 @@ export class StampingService {
       isoDate(occurredAt),
       input.workLocationId ?? null,
     );
-    const view = this.buildView(result.events, resolved.timeZone, occurredAt, now);
+    const packageFor = await this.rules.resolverFor(input.employeeId);
+    const view = this.buildView(result.events, resolved.timeZone, occurredAt, now, packageFor);
     return { event: row, status: view.status, findings: view.findings };
   }
 
@@ -380,7 +390,8 @@ export class StampingService {
       isoDate(correctedAt),
       result.workLocationId,
     );
-    const view = this.buildView(result.events, resolved.timeZone, correctedAt, now);
+    const packageFor = await this.rules.resolverFor(result.employeeId);
+    const view = this.buildView(result.events, resolved.timeZone, correctedAt, now, packageFor);
     return { event: row, status: view.status, findings: view.findings };
   }
 
@@ -402,7 +413,8 @@ export class StampingService {
     const ctx = this.tenantContext.require();
     const rows = await this.loadWindowRows(ctx.tenantId, employeeId, now);
     const resolved = await this.workLocations.resolve(employeeId, isoDate(now));
-    const view = this.buildView(rows.map(toStampEvent), resolved.timeZone, now, now);
+    const packageFor = await this.rules.resolverFor(employeeId);
+    const view = this.buildView(rows.map(toStampEvent), resolved.timeZone, now, now, packageFor);
 
     // Roh-Ereignisse (inkl. korrigierter Originale) im Zeitbereich der
     // Schichten des Referenztags - fuer die Timeline mit Korrektur-Historie.
@@ -445,7 +457,8 @@ export class StampingService {
     const ctx = this.tenantContext.require();
     const rows = await this.loadWindowRows(ctx.tenantId, employeeId, now);
     const resolved = await this.workLocations.resolve(employeeId, isoDate(now));
-    return this.buildView(rows.map(toStampEvent), resolved.timeZone, now, now);
+    const packageFor = await this.rules.resolverFor(employeeId);
+    return this.buildView(rows.map(toStampEvent), resolved.timeZone, now, now, packageFor);
   }
 
   /**
