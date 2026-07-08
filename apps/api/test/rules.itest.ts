@@ -8,6 +8,7 @@ import * as schema from '../src/db/schema';
 import type { Database } from '../src/db/tokens';
 import { GeofenceService } from '../src/geofence/geofence.service';
 import { ReportingService } from '../src/reporting/reporting.service';
+import { ReprocessingService } from '../src/rules/reprocessing.service';
 import { RuleResolutionService } from '../src/rules/rule-resolution.service';
 import { RulesService } from '../src/rules/rules.service';
 import { StampingService } from '../src/stamping/stamping.service';
@@ -43,7 +44,8 @@ beforeAll(async () => {
   const geofence = new GeofenceService(db, tenantContext, auditStub);
   const workLocations = new WorkLocationService(db, tenantContext, auditStub);
   resolution = new RuleResolutionService(db, tenantContext);
-  rules = new RulesService(db, tenantContext, auditStub);
+  const reprocessing = new ReprocessingService(db, tenantContext, auditStub, resolution, workLocations);
+  rules = new RulesService(db, tenantContext, auditStub, reprocessing);
   stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations, resolution);
   reporting = new ReportingService(db, tenantContext, workLocations, resolution);
 

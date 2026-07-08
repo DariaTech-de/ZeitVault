@@ -25,6 +25,7 @@ import {
   ruleSets,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { ReprocessingService } from './reprocessing.service';
 
 /**
  * Stammdaten der Regelschicht (B-08/B-10): Tarifvertraege/Betriebs-
@@ -39,6 +40,7 @@ export class RulesService {
     @Inject(DB) private readonly db: Database,
     private readonly tenantContext: TenantContextService,
     private readonly audit: AuditClient,
+    private readonly reprocessing: ReprocessingService,
   ) {}
 
   private tx<T>(
@@ -253,6 +255,9 @@ export class RulesService {
         params: JSON.stringify(row.params),
       },
     });
+    // B-10: Ein rueckwirkend wirksamer Regelsatz loest die Neubewertung der
+    // betroffenen Tage aus (Lauf wird protokolliert; Differenzen: F-04).
+    await this.reprocessing.runForRuleSet(row);
     return row;
   }
 
@@ -286,6 +291,8 @@ export class RulesService {
       subjectId: id,
       payload: { name: row.name, layer: row.layer },
     });
+    // B-10: Auch das Deaktivieren aendert die Bewertung rueckwirkend.
+    await this.reprocessing.runForRuleSet(row);
     return row;
   }
 }
