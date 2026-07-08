@@ -145,6 +145,7 @@ Nicht-triviale Entscheidungen werden als ADR dokumentiert (relative Links in Cro
 - [`docs/adr/0016-einsatzort-work-location.md`](docs/adr/0016-einsatzort-work-location.md) – Einsatzort als Entität (work_location), Übersteuerung je Zeiteintrag, Bewertungs-Snapshot
 - [`docs/adr/0017-stamp-events-als-ereignisquelle.md`](docs/adr/0017-stamp-events-als-ereignisquelle.md) – stamp_events als einzige Ereignisquelle, time_entries als deterministische Projektion
 - [`docs/adr/0018-abrechnungstag-vs-zeitscheiben.md`](docs/adr/0018-abrechnungstag-vs-zeitscheiben.md) – Abrechnungstag (accounting_day) getrennt von minutengenauer Zeitscheiben-Splittung
+- [`docs/adr/0019-unresolved-schichten.md`](docs/adr/0019-unresolved-schichten.md) – Unresolved-Zustandsmodell für nicht beendete Schichten (kein Implicit-Close, kein synthetisches Ereignis)
 
 Einheitliches ADR-Format (Überschriften exakt):
 
