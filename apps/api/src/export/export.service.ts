@@ -9,7 +9,10 @@ import {
   buildAccountingDays,
   countWorkingDays,
   mapToLineItems,
+  materializeShift,
+  shiftResolution,
   toPayrollCsv,
+  totalMinutes,
 } from '@zeitvault/domain';
 import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
@@ -33,7 +36,15 @@ const ABSENCE_CATEGORY: Record<string, PayrollCategory> = {
 };
 
 function toStampEvent(row: StampEventRow): StampEvent {
-  return { id: row.id, kind: row.kind, at: row.occurredAt, correctsId: row.correctsEventId };
+  return {
+    id: row.id,
+    kind: row.kind,
+    at: row.occurredAt,
+    correctsId: row.correctsEventId,
+    // Korrekturweg-Herkunft (auch Nachtraege ohne correctsId): unterscheidet
+    // 'closed' von 'closed_by_correction' (ADR-0019).
+    viaCorrection: row.correctsEventId !== null || row.correctionReason !== null,
+  };
 }
 
 export interface ExportResult {
@@ -254,9 +265,20 @@ export class ExportService {
     const workedByEmployee = new Map<string, number>();
     for (const [employeeId, events] of byEmployee) {
       const tz = (await this.workLocations.resolve(employeeId, from)).timeZone;
-      const minutes = buildAccountingDays(events, tz, ARBZG_2026_V1, materializeAt)
-        .filter((d) => d.date >= from && d.date <= to)
-        .reduce((s, d) => s + d.workedMinutes, 0);
+      const days = buildAccountingDays(events, tz, ARBZG_2026_V1, materializeAt).filter(
+        (d) => d.date >= from && d.date <= to,
+      );
+      // ADR-0019: Unaufgeloeste Schichten (Ende unbekannt) werden NICHT
+      // exportiert - Lohn zahlt nie auf eine Untergrenze. Die Aufloesung
+      // erfolgt durch Menschen; der Perioden-Freeze (F-03, Schnitt 5) wird
+      // solche Perioden zusaetzlich blockieren.
+      let minutes = 0;
+      for (const day of days) {
+        for (const shift of day.shifts) {
+          if (shiftResolution(shift, materializeAt) === 'unresolved') continue;
+          minutes += totalMinutes(materializeShift(shift, materializeAt).workIntervals);
+        }
+      }
       if (minutes > 0) workedByEmployee.set(employeeId, minutes);
     }
 

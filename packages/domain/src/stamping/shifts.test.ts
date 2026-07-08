@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { foldShifts, selectShiftsForAccountingDay, shiftAccountingDay, shiftState } from './shifts';
+import {
+  foldShifts,
+  materializeShift,
+  selectShiftsForAccountingDay,
+  shiftAccountingDay,
+  shiftResolution,
+  shiftState,
+} from './shifts';
 import type { StampEvent } from './types';
 
 const d = (iso: string): Date => new Date(iso);
@@ -37,7 +44,7 @@ describe('foldShifts', () => {
     expect(shifts).toHaveLength(2);
     expect(shifts[0]?.endAt).not.toBeNull();
     expect(shifts[1]?.endAt).toBeNull();
-    expect(shiftState(shifts)).toBe('in');
+    expect(shiftState(shifts, d('2026-07-07T07:00:00Z'))).toBe('in');
   });
 
   it('DST-Fruehjahr: Schicht lokal 22:00-06:00 hat 7 h Arbeitszeit (K-01)', () => {
@@ -64,47 +71,76 @@ describe('foldShifts', () => {
     expect(minutes).toBe(9 * 60);
   });
 
-  it('unzulaessige Uebergaenge werfen weiterhin (doppeltes Einstempeln, verwaistes Ausstempeln)', () => {
-    expect(() =>
-      foldShifts([ev('clock_in', '2026-07-06T06:00:00Z'), ev('clock_in', '2026-07-06T08:00:00Z')]),
-    ).toThrow(/eingestempelt/i);
+  it('verwaiste Uebergaenge werfen weiterhin (clock_out/Pause ohne Einstempeln)', () => {
     expect(() => foldShifts([ev('clock_out', '2026-07-06T14:00:00Z')])).toThrow();
+    expect(() => foldShifts([ev('break_start', '2026-07-06T14:00:00Z')])).toThrow();
   });
 
-  // Vergessenes Ausstempeln: Ein clock_in nach mehr als 12 h Inaktivitaet
-  // schliesst die haengende Schicht IMPLIZIT an ihrem letzten Ereignis (das
-  // offene Segment wird NICHT als Arbeitszeit gezaehlt; Korrektur erfolgt ueber
-  // den Anpassungsantrag). Reine Projektionsentscheidung - es wird KEIN
-  // synthetisches Ereignis geschrieben (ADR-0017, GoBD).
-  it('clock_in nach > 12 h Inaktivitaet schliesst die haengende Schicht implizit', () => {
-    const shifts = foldShifts([
-      ev('clock_in', '2026-07-06T06:00:00Z'),
-      // vergessenes clock_out; letztes Ereignis 06:00 -> naechster Tag 08:00 = 26 h
-      ev('clock_in', '2026-07-07T08:00:00Z'),
-      ev('clock_out', '2026-07-07T16:00:00Z'),
-    ]);
-    expect(shifts).toHaveLength(2);
-    expect(shifts[0]?.endedImplicitly).toBe(true);
-    expect(shifts[0]?.endAt?.toISOString()).toBe('2026-07-06T06:00:00.000Z');
-    expect(shifts[0]?.workIntervals).toHaveLength(0); // haengendes Segment zaehlt nicht
-    expect(shifts[1]?.endedImplicitly).toBeUndefined();
-    expect(shifts[1]?.endAt?.toISOString()).toBe('2026-07-07T16:00:00.000Z');
-  });
+  // ADR-0019: clock_in ist IMMER erfolgreich. Trifft es auf eine offene
+  // Schicht, wird diese 'unresolved' - endAt bleibt NULL (keine Behauptung),
+  // workedAtLeastUntil ist die Untergrenze, das haengende Segment zaehlt nicht.
+  // Kein synthetisches Ereignis (ADR-0017, GoBD).
+  describe('unresolved (ADR-0019)', () => {
+    it('PO-Szenario 1: Spaetschicht mit Pause, clock_out vergessen - naechstes clock_in blockiert NICHT', () => {
+      const shifts = foldShifts([
+        ev('clock_in', '2026-07-06T12:00:00Z'), // Mo 14:00 lokal
+        ev('break_start', '2026-07-06T16:00:00Z'), // 18:00 lokal
+        ev('break_end', '2026-07-06T16:30:00Z'), // 18:30 lokal
+        // clock_out (23:00) vergessen; 11,5 h spaeter (frueher: 409 unter 12 h):
+        ev('clock_in', '2026-07-07T04:00:00Z'), // Di 06:00 lokal
+      ]);
+      expect(shifts).toHaveLength(2);
+      const forgotten = shifts[0]!;
+      expect(forgotten.unresolved).toBe(true);
+      expect(forgotten.endAt).toBeNull(); // keine Behauptung
+      expect(forgotten.workedAtLeastUntil?.toISOString()).toBe('2026-07-06T16:30:00.000Z');
+      expect(forgotten.workIntervals).toHaveLength(1); // nur das abgeschlossene Intervall
+      expect(shifts[1]?.unresolved).toBeUndefined();
+      expect(shiftState(shifts, d('2026-07-07T05:00:00Z'))).toBe('in');
+    });
 
-  it('clock_out nach langem Abstand bleibt gueltig (lange Schicht, kein Implicit-Close)', () => {
-    // 10-h-Nachtschicht ohne Pausenstempel: Abstand < 12 h, regulaer gueltig.
-    const shifts = foldShifts([
-      ev('clock_in', '2026-07-06T18:00:00Z'),
-      ev('clock_out', '2026-07-07T04:00:00Z'),
-    ]);
-    expect(shifts).toHaveLength(1);
-    expect(shifts[0]?.endedImplicitly).toBeUndefined();
-  });
+    it('unresolved wird nicht materialisiert (Untergrenze, kein geratenes Ende)', () => {
+      const shifts = foldShifts([
+        ev('clock_in', '2026-07-06T12:00:00Z'),
+        ev('clock_in', '2026-07-07T04:00:00Z'),
+      ]);
+      const m = materializeShift(shifts[0]!, d('2026-07-07T05:00:00Z'));
+      expect(m.workIntervals).toHaveLength(0);
+      expect(shifts[0]?.workedAtLeastUntil?.toISOString()).toBe('2026-07-06T12:00:00.000Z');
+    });
 
-  it('doppeltes Einstempeln mit kurzem Abstand wirft weiterhin (kein Implicit-Close)', () => {
-    expect(() =>
-      foldShifts([ev('clock_in', '2026-07-06T06:00:00Z'), ev('clock_in', '2026-07-06T11:00:00Z')]),
-    ).toThrow(/eingestempelt/i);
+    it('auch doppeltes Einstempeln mit kurzem Abstand blockiert nicht (Mensch loest auf)', () => {
+      const shifts = foldShifts([
+        ev('clock_in', '2026-07-06T06:00:00Z'),
+        ev('clock_in', '2026-07-06T06:00:30Z'),
+      ]);
+      expect(shifts).toHaveLength(2);
+      expect(shifts[0]?.unresolved).toBe(true);
+    });
+
+    it('Kulanzfrist: offene Schicht ist erst open, nach Ablauf unresolved', () => {
+      const shifts = foldShifts([ev('clock_in', '2026-07-06T06:00:00Z')]);
+      const shift = shifts[0]!;
+      expect(shiftResolution(shift, d('2026-07-06T14:00:00Z'))).toBe('open');
+      expect(materializeShift(shift, d('2026-07-06T14:00:00Z')).workIntervals).toHaveLength(1);
+      expect(shiftResolution(shift, d('2026-07-07T06:00:00Z'))).toBe('unresolved');
+      expect(materializeShift(shift, d('2026-07-07T06:00:00Z')).workIntervals).toHaveLength(0);
+      expect(shiftState(shifts, d('2026-07-07T06:00:00Z'))).toBe('out');
+    });
+
+    it('closed vs. closed_by_correction unterscheidet den Korrekturweg', () => {
+      const now = d('2026-07-07T00:00:00Z');
+      const regular = foldShifts([
+        ev('clock_in', '2026-07-06T06:00:00Z'),
+        ev('clock_out', '2026-07-06T14:00:00Z'),
+      ]);
+      expect(shiftResolution(regular[0]!, now)).toBe('closed');
+      const corrected = foldShifts([
+        ev('clock_in', '2026-07-06T06:00:00Z'),
+        { kind: 'clock_out', at: d('2026-07-06T14:00:00Z'), viaCorrection: true },
+      ]);
+      expect(shiftResolution(corrected[0]!, now)).toBe('closed_by_correction');
+    });
   });
 
   it('Korrekturen (correctsId) werden vor der Faltung aufgeloest', () => {

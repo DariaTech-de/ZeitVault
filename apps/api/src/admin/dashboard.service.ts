@@ -160,7 +160,7 @@ export class DashboardService {
       try {
         const tz = (await this.workLocations.resolve(employeeId, todayKey)).timeZone;
         const days = buildAccountingDays(events, tz, ARBZG_2026_V1, now);
-        if (shiftState(foldShifts(events)) !== 'out') presentNow += 1;
+        if (shiftState(foldShifts(events), now) !== 'out') presentNow += 1;
         for (const day of days) {
           const current = activityMap.get(day.date);
           if (current !== undefined) activityMap.set(day.date, current + day.workedMinutes);

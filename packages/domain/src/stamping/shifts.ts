@@ -11,36 +11,49 @@ import type { StampEvent, StampState } from './types';
  */
 export interface Shift {
   startAt: Date;
-  /** null = Schicht ist noch offen. */
+  /** null = kein clock_out bekannt (Schicht laeuft ODER ist unaufgeloest). */
   endAt: Date | null;
   workIntervals: WorkInterval[];
   breakIntervals: BreakInterval[];
-  /** Offenes Segment (nur bei endAt === null). */
+  /** Offenes Segment (nur bei endAt === null und nicht unresolved). */
   open: { kind: 'work' | 'break'; since: Date } | null;
   /** Wirksame Ereignisse dieser Schicht (chronologisch). */
   events: StampEvent[];
   /**
-   * Vergessenes Ausstempeln: Die Schicht wurde durch ein spaeteres clock_in
-   * (> IMPLICIT_CLOSE_GAP_MS Inaktivitaet) implizit an ihrem letzten Ereignis
-   * geschlossen; das haengende Segment zaehlt NICHT als Arbeitszeit. Korrektur
-   * erfolgt fachlich ueber den Anpassungsantrag (kein synthetisches Ereignis,
-   * ADR-0017/GoBD).
+   * Ende unbekannt (ADR-0019): Ein nachfolgendes clock_in traf auf diese
+   * offene Schicht. `endAt` bleibt NULL (keine Behauptung), das haengende
+   * Segment ist NICHT materialisierbar; `workedAtLeastUntil` ist die
+   * Untergrenze. Aufloesung ausschliesslich durch Menschen (Anpassungsantrag
+   * oder FK-Ersatzweg), niemals automatisch.
    */
-  endedImplicitly?: true;
+  unresolved?: true;
+  /**
+   * Zeitpunkt des letzten bekannten Ereignisses: AUSDRUECKLICH eine
+   * Untergrenze der Anwesenheit, nie ein Ende (UI: "mindestens bis").
+   */
+  workedAtLeastUntil?: Date;
 }
 
+/** Aufloesungszustand einer Schicht (ADR-0019). */
+export type ShiftResolution = 'open' | 'unresolved' | 'closed' | 'closed_by_correction';
+
 /**
- * Inaktivitaetsgrenze fuer das implizite Schliessen haengender Schichten durch
- * ein neues clock_in. Gross genug fuer lange Schichten ohne Zwischenstempel
- * (10-12 h), klein genug, dass ein Folgetags-clock_in nach vergessenem
- * Ausstempeln nicht dauerhaft blockiert.
+ * Kulanzfrist: Solange das letzte Ereignis einer nicht beendeten Schicht
+ * juenger ist, gilt sie als 'open' (laeuft); danach als 'unresolved'.
+ * 16 h decken die laengste plausible Schicht (Bereitschaft nach Paragraf 7
+ * Abs. 2a ArbZG stempelt zwischendurch) ohne Fehlklassifikation ab.
+ * TODO(B-08): Der Parameter gehoert in die Regelschicht aus Schnitt 2,
+ * gebunden an ein collective_agreement-Objekt (Paragraf 87 Abs. 1 Nr. 2
+ * BetrVG) - bis dahin bewusst NUR diese Konstante.
  */
-export const IMPLICIT_CLOSE_GAP_MS = 12 * 60 * 60 * 1000;
+export const OPEN_SHIFT_GRACE_MS = 16 * 60 * 60 * 1000;
 
 /**
  * Faltet Rohereignisse (inkl. Korrektur-Aufloesung ueber correctsId) zu
  * Schichten. Wirft StampTransitionError bei unzulaessigen Statuswechseln -
- * identische Zustandsmaschine wie die Tagesfaltung, aber ohne Tagesgrenze.
+ * mit einer Ausnahme (ADR-0019): `clock_in` ist IMMER erfolgreich; trifft es
+ * auf eine offene Schicht, wird diese `unresolved` (Ende unbekannt), nie
+ * implizit geschlossen und nie blockiert.
  */
 export function foldShifts(events: readonly StampEvent[]): Shift[] {
   const effective = [...resolveEffectiveEvents(events)].sort(
@@ -55,25 +68,17 @@ export function foldShifts(events: readonly StampEvent[]): Shift[] {
   for (const event of effective) {
     switch (event.kind) {
       case 'clock_in':
-        if (state !== 'out' || current !== null) {
-          const lastAt = current?.events.at(-1)?.at;
-          if (
-            current !== null &&
-            lastAt !== undefined &&
-            event.at.getTime() - lastAt.getTime() > IMPLICIT_CLOSE_GAP_MS
-          ) {
-            // Vergessenes Ausstempeln: haengende Schicht implizit am letzten
-            // Ereignis schliessen; das offene Segment zaehlt nicht.
-            current.endAt = lastAt;
-            current.open = null;
-            current.endedImplicitly = true;
-            shifts.push(current);
-            current = null;
-            state = 'out';
-            segmentStart = null;
-          } else {
-            throw new StampTransitionError('Bereits eingestempelt.');
-          }
+        if (current !== null) {
+          // ADR-0019: Die nicht beendete Vorschicht wird 'unresolved' - das
+          // Ende bleibt unbekannt (endAt NULL, kein synthetisches Ereignis),
+          // das haengende Segment zaehlt nicht als Arbeitszeit.
+          current.open = null;
+          current.unresolved = true;
+          current.workedAtLeastUntil = current.events.at(-1)?.at ?? current.startAt;
+          shifts.push(current);
+          current = null;
+          state = 'out';
+          segmentStart = null;
         }
         current = {
           startAt: event.at,
@@ -129,16 +134,48 @@ export function foldShifts(events: readonly StampEvent[]): Shift[] {
   return shifts;
 }
 
-/** Aktueller Anwesenheitsstatus aus der Schichtliste. */
-export function shiftState(shifts: readonly Shift[]): StampState {
+/** Zeitpunkt des letzten bekannten Ereignisses einer Schicht. */
+export function shiftLastEventAt(shift: Shift): Date {
+  return shift.events.at(-1)?.at ?? shift.startAt;
+}
+
+/**
+ * Aufloesungszustand einer Schicht zum Zeitpunkt `now` (ADR-0019):
+ * - endAt gesetzt: 'closed'; 'closed_by_correction', wenn das beendende
+ *   Ereignis ueber den Korrekturweg entstand.
+ * - endAt NULL: 'unresolved', wenn ein nachfolgendes clock_in es festgestellt
+ *   hat ODER die Kulanzfrist seit dem letzten Ereignis abgelaufen ist;
+ *   sonst 'open' (laeuft).
+ */
+export function shiftResolution(
+  shift: Shift,
+  now: Date,
+  graceMs: number = OPEN_SHIFT_GRACE_MS,
+): ShiftResolution {
+  if (shift.endAt !== null) {
+    const terminating = shift.events.at(-1);
+    return terminating?.correctsId || terminating?.viaCorrection
+      ? 'closed_by_correction'
+      : 'closed';
+  }
+  if (shift.unresolved) return 'unresolved';
+  return now.getTime() - shiftLastEventAt(shift).getTime() > graceMs ? 'unresolved' : 'open';
+}
+
+/** Aktueller Anwesenheitsstatus aus der Schichtliste (Kulanzfrist beachtet). */
+export function shiftState(shifts: readonly Shift[], now: Date): StampState {
   const last = shifts.at(-1);
   if (!last || last.endAt !== null) return 'out';
+  if (shiftResolution(last, now) !== 'open') return 'out';
   return last.open?.kind === 'break' ? 'break' : 'in';
 }
 
 /**
- * Schliesst das offene Segment einer Schicht zum Zeitpunkt `now` ("Stand
- * jetzt"); liegt `now` vor dem Segmentbeginn, wird auf den Beginn geklemmt.
+ * Schliesst das offene Segment einer LAUFENDEN Schicht zum Zeitpunkt `now`
+ * ("Stand jetzt"); liegt `now` vor dem Segmentbeginn, wird auf den Beginn
+ * geklemmt. Unaufgeloeste Schichten (ADR-0019) werden NICHT materialisiert:
+ * ihr haengendes Segment ist keine Arbeitszeit, die Intervalle sind die
+ * Untergrenze.
  */
 export function materializeShift(
   shift: Shift,
@@ -146,7 +183,7 @@ export function materializeShift(
 ): { workIntervals: WorkInterval[]; breakIntervals: BreakInterval[] } {
   const workIntervals = [...shift.workIntervals];
   const breakIntervals = [...shift.breakIntervals];
-  if (shift.endAt === null && shift.open) {
+  if (shift.endAt === null && shift.open && shiftResolution(shift, now) === 'open') {
     const end = now.getTime() < shift.open.since.getTime() ? shift.open.since : now;
     if (shift.open.kind === 'work') {
       workIntervals.push({ start: shift.open.since, end });

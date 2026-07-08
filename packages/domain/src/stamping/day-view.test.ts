@@ -84,6 +84,74 @@ describe('buildAccountingDays', () => {
   });
 });
 
+// ADR-0019: Unaufgeloeste Schichten werden nie "eingehalten" bewertet - was
+// aus der Untergrenze folgt, ist ein sicherer Verstoss; was vom unbekannten
+// Ende abhaengt, ist "nicht pruefbar".
+describe('buildAccountingDays: unresolved (ADR-0019)', () => {
+  it('PO-Szenario 2: ohne erfasste Pause wird die Ruhezeit "nicht pruefbar", nicht "eingehalten"', () => {
+    const days = buildAccountingDays(
+      [
+        ev('clock_in', '2026-07-06T12:00:00Z'), // Mo 14:00 lokal, clock_out vergessen
+        ev('clock_in', '2026-07-07T04:00:00Z'), // Di 06:00 lokal
+        ev('clock_out', '2026-07-07T12:00:00Z'),
+      ],
+      'Europe/Berlin',
+      ARBZG_2026_V1,
+      d('2026-07-07T13:00:00Z'),
+    );
+    expect(days).toHaveLength(2);
+    // Montag: Untergrenze 0 min, als unaufgeloest gekennzeichnet.
+    expect(days[0]?.workedMinutes).toBe(0);
+    expect(days[0]?.findings.map((f) => f.code)).toContain('SHIFT_UNRESOLVED');
+    // Dienstag: Ruhezeit gegen die Untergrenze (16 h Obergrenze) ist nicht
+    // beweisbar verletzt -> "nicht pruefbar", NIE stillschweigend eingehalten.
+    const tuesday = days[1]!.findings.map((f) => f.code);
+    expect(tuesday).toContain('REST_PERIOD_UNVERIFIABLE');
+    expect(tuesday).not.toContain('REST_PERIOD_TOO_SHORT');
+  });
+
+  it('sicherer Ruhezeit-Verstoss gegen die Untergrenze wird gemeldet', () => {
+    const days = buildAccountingDays(
+      [
+        ev('clock_in', '2026-07-06T12:00:00Z'), // Mo 14:00 lokal
+        ev('break_start', '2026-07-06T21:00:00Z'), // 23:00 lokal
+        ev('break_end', '2026-07-06T21:30:00Z'), // 23:30 lokal - Untergrenze
+        ev('clock_in', '2026-07-07T04:00:00Z'), // Di 06:00 lokal: hoechstens 6,5 h Ruhe
+        ev('clock_out', '2026-07-07T12:00:00Z'),
+      ],
+      'Europe/Berlin',
+      ARBZG_2026_V1,
+      d('2026-07-07T13:00:00Z'),
+    );
+    const tuesday = days[1]!.findings;
+    const rest = tuesday.find((f) => f.code === 'REST_PERIOD_TOO_SHORT');
+    expect(rest).toBeDefined();
+    expect(rest?.message).toContain('höchstens');
+  });
+
+  it('Kulanzfrist abgelaufen ohne Folge-Ereignis: Tag wird unaufgeloest, Untergrenze zaehlt', () => {
+    const days = buildAccountingDays(
+      [ev('clock_in', '2026-07-06T04:00:00Z')],
+      'Europe/Berlin',
+      ARBZG_2026_V1,
+      d('2026-07-07T04:00:00Z'), // 24 h spaeter, > Kulanzfrist
+    );
+    expect(days[0]?.workedMinutes).toBe(0);
+    expect(days[0]?.findings.map((f) => f.code)).toContain('SHIFT_UNRESOLVED');
+  });
+
+  it('laufende Schicht innerhalb der Kulanzfrist bleibt "Stand jetzt" bewertet', () => {
+    const days = buildAccountingDays(
+      [ev('clock_in', '2026-07-06T04:00:00Z')],
+      'Europe/Berlin',
+      ARBZG_2026_V1,
+      d('2026-07-06T12:00:00Z'), // 8 h spaeter
+    );
+    expect(days[0]?.workedMinutes).toBe(8 * 60);
+    expect(days[0]?.findings.map((f) => f.code)).not.toContain('SHIFT_UNRESOLVED');
+  });
+});
+
 // PRUEFSTEIN (Schnitt-1-Abnahme): Der Abrechnungstag (ADR-0018) ist NUR ein
 // Zusatzattribut der Schicht — die Zeitscheiben behalten die echten
 // Zeitstempel. Nur so bleiben minutengenaue Zuschlagsfenster ableitbar:

@@ -67,9 +67,11 @@ export type FindingCode =
   | 'MAX_DAILY_WORKTIME_EXCEEDED'
   | 'MAX_DAILY_WORKTIME_EXTENDED_EXCEEDED'
   | 'REST_PERIOD_TOO_SHORT'
+  | 'REST_PERIOD_UNVERIFIABLE'
   | 'BREAK_MISSING'
   | 'BREAK_TOO_SHORT'
-  | 'CONTINUOUS_WORK_EXCEEDED';
+  | 'CONTINUOUS_WORK_EXCEEDED'
+  | 'SHIFT_UNRESOLVED';
 
 /** Ein Bewertungsbefund (Warnung oder Verstoss). */
 export interface Finding {
@@ -88,4 +90,10 @@ export interface WorkDayInput {
   breaks: BreakInterval[];
   /** Ende des letzten Arbeitseinsatzes am Vortag (fuer Ruhezeit) oder null. */
   previousShiftEnd: Date | null;
+  /**
+   * previousShiftEnd ist nur eine UNTERGRENZE (Vorschicht unaufgeloest,
+   * ADR-0019): Die Ruhezeit ist dann hoechstens die gemessene - ein Verstoss
+   * bleibt sicher, Einhaltung ist nicht pruefbar.
+   */
+  previousShiftEndIsLowerBound?: boolean;
 }

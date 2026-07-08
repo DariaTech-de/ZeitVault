@@ -21,7 +21,15 @@ const EVENT_WINDOW_MS = 48 * 60 * 60 * 1000;
 const LATE_ENTRY_MS = 24 * 60 * 60 * 1000;
 
 function toStampEvent(row: StampEventRow): StampEvent {
-  return { id: row.id, kind: row.kind, at: row.occurredAt, correctsId: row.correctsEventId };
+  return {
+    id: row.id,
+    kind: row.kind,
+    at: row.occurredAt,
+    correctsId: row.correctsEventId,
+    // Korrekturweg-Herkunft (auch Nachtraege ohne correctsId): unterscheidet
+    // 'closed' von 'closed_by_correction' (ADR-0019).
+    viaCorrection: row.correctsEventId !== null || row.correctionReason !== null,
+  };
 }
 
 @Injectable()

@@ -5,6 +5,8 @@ import {
   foldShifts,
   materializeShift,
   shiftAccountingDay,
+  shiftLastEventAt,
+  shiftResolution,
 } from './shifts';
 import type { StampEvent } from './types';
 
@@ -12,11 +14,16 @@ import type { StampEvent } from './types';
  * Bewertete Sicht eines Abrechnungstags (ADR-0018): alle Schichten, deren
  * lokaler Beginn auf diesen Kalendertag faellt, inkl. ArbZG-Befunden. Die
  * Ruhezeit wird ueber die Tagessequenz hinweg mit dem Ende der jeweils vorigen
- * Schicht verkettet (B-03/K-03).
+ * Schicht verkettet (B-03/K-03); bei unaufgeloesten Vorschichten (ADR-0019)
+ * mit deren Untergrenze (`workedAtLeastUntil`).
  */
 export interface AccountingDay {
   /** Lokaler Kalendertag (YYYY-MM-DD) in der Zeitzone des Einsatzortes. */
   date: string;
+  /**
+   * Gearbeitete Minuten; enthaelt bei unaufgeloesten Schichten nur die durch
+   * Ereignisse abgeschlossenen Intervalle (UNTERGRENZE, ADR-0019).
+   */
   workedMinutes: number;
   breakMinutes: number;
   findings: Finding[];
@@ -27,7 +34,9 @@ export interface AccountingDay {
  * Gemeinsame Tagessicht fuer Stempeln (Live-Befunde), Heute-Ansicht, Report
  * und Export: faltet Ereignisse zu Schichten, ordnet sie ihrem Abrechnungstag
  * zu (lokaler Tag des Schichtbeginns, ADR-0018) und bewertet jeden Tag gegen
- * das Regelpaket. Offene Schichten werden zu `now` materialisiert.
+ * das Regelpaket. Laufende Schichten werden zu `now` materialisiert;
+ * unaufgeloeste Schichten (ADR-0019) NICHT - sie erhalten den Befund
+ * SHIFT_UNRESOLVED und zaehlen nur mit ihrer Untergrenze.
  */
 export function buildAccountingDays(
   events: readonly StampEvent[],
@@ -46,19 +55,46 @@ export function buildAccountingDays(
 
   const days: AccountingDay[] = [];
   let previousShiftEnd: Date | null = null;
+  let previousEndIsLowerBound = false;
   for (const date of [...byDay.keys()].sort()) {
     const dayShifts = byDay.get(date) ?? [];
     const workIntervals: WorkInterval[] = [];
     const breakIntervals: BreakInterval[] = [];
+    const unresolvedShifts: Shift[] = [];
     for (const shift of dayShifts) {
       const m = materializeShift(shift, now);
       workIntervals.push(...m.workIntervals);
       breakIntervals.push(...m.breakIntervals);
+      if (shiftResolution(shift, now) === 'unresolved') {
+        unresolvedShifts.push(shift);
+      }
     }
     const findings = evaluateWorkDay(
-      { date, intervals: workIntervals, breaks: breakIntervals, previousShiftEnd },
+      {
+        date,
+        intervals: workIntervals,
+        breaks: breakIntervals,
+        previousShiftEnd,
+        previousShiftEndIsLowerBound: previousEndIsLowerBound,
+      },
       rulePackage,
     );
+    // ADR-0019: Der Tag ist nicht abschliessend pruefbar - die Arbeitszeit ist
+    // eine Untergrenze ("mindestens bis"), niemals "eingehalten" behaupten.
+    for (const shift of unresolvedShifts) {
+      const atLeastUntil = shift.workedAtLeastUntil ?? shiftLastEventAt(shift);
+      findings.push({
+        code: 'SHIFT_UNRESOLVED',
+        severity: 'warning',
+        message:
+          'Schichtende unbekannt (kein Ausstempeln): Arbeitszeit ist eine Untergrenze ' +
+          '(mindestens bis zum letzten Ereignis); Auflösung per Anpassungsantrag erforderlich.',
+        details: {
+          shiftStartMs: shift.startAt.getTime(),
+          workedAtLeastUntilMs: atLeastUntil.getTime(),
+        },
+      });
+    }
     days.push({
       date,
       workedMinutes: totalMinutes(workIntervals),
@@ -66,8 +102,20 @@ export function buildAccountingDays(
       findings,
       shifts: dayShifts,
     });
-    const lastEnd = dayShifts.at(-1)?.endAt;
-    if (lastEnd) previousShiftEnd = lastEnd;
+    // Ruhezeit-Anker fuer den Folgetag: letztes bekanntes Schichtende; bei
+    // unaufgeloesten Schichten die Untergrenze (Verstoss bleibt sicher,
+    // Einhaltung wird "nicht pruefbar").
+    const last = dayShifts.at(-1);
+    if (last) {
+      if (last.endAt) {
+        previousShiftEnd = last.endAt;
+        previousEndIsLowerBound = false;
+      } else if (shiftResolution(last, now) === 'unresolved') {
+        previousShiftEnd = last.workedAtLeastUntil ?? shiftLastEventAt(last);
+        previousEndIsLowerBound = true;
+      }
+      // Laufende Schicht: Anker unveraendert lassen (kein Ende bekannt).
+    }
   }
   return days;
 }

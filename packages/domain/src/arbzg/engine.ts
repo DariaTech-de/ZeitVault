@@ -184,11 +184,20 @@ export function evaluateContinuousWork(
   return [];
 }
 
-/** Prueft die Mindestruhezeit gegenueber dem Ende des Vortags-Einsatzes. */
+/**
+ * Prueft die Mindestruhezeit gegenueber dem Ende des Vortags-Einsatzes.
+ *
+ * Ist die Vorschicht unaufgeloest (ADR-0019), ist `previousShiftEnd` nur die
+ * UNTERGRENZE der Anwesenheit ("mindestens bis"): die tatsaechliche Ruhezeit
+ * ist hoechstens die gemessene. Ein Verstoss gegen die Untergrenze ist damit
+ * ein SICHERER Verstoss; andernfalls ist die Ruhezeit "nicht pruefbar" -
+ * niemals "eingehalten".
+ */
 export function evaluateRestPeriod(
   previousShiftEnd: Date | null,
   currentStart: Date,
   params: ArbZgRuleParams,
+  previousEndIsLowerBound = false,
 ): Finding[] {
   if (previousShiftEnd === null) return [];
   const restMinutes = (currentStart.getTime() - previousShiftEnd.getTime()) / MINUTE_MS;
@@ -197,8 +206,22 @@ export function evaluateRestPeriod(
       {
         code: 'REST_PERIOD_TOO_SHORT',
         severity: 'violation',
-        message: `Ruhezeit zu kurz: ${restMinutes} min statt erforderlicher ${params.minRestMinutes} min.`,
+        message: previousEndIsLowerBound
+          ? `Ruhezeit zu kurz: höchstens ${restMinutes} min statt erforderlicher ${params.minRestMinutes} min (Ende der Vorschicht unbekannt, Untergrenze).`
+          : `Ruhezeit zu kurz: ${restMinutes} min statt erforderlicher ${params.minRestMinutes} min.`,
         details: { restMinutes, requiredRestMinutes: params.minRestMinutes },
+      },
+    ];
+  }
+  if (previousEndIsLowerBound) {
+    return [
+      {
+        code: 'REST_PERIOD_UNVERIFIABLE',
+        severity: 'warning',
+        message:
+          'Ruhezeit nicht prüfbar: Das Ende der Vorschicht ist unbekannt (kein Ausstempeln); ' +
+          'die gemessene Ruhezeit ist nur eine Obergrenze.',
+        details: { maxRestMinutes: restMinutes, requiredRestMinutes: params.minRestMinutes },
       },
     ];
   }
@@ -233,7 +256,14 @@ export function evaluateWorkDay(input: WorkDayInput, rulePackage: RulePackage): 
 
   const start = earliestStart(input.intervals);
   if (start !== null) {
-    findings.push(...evaluateRestPeriod(input.previousShiftEnd, start, params));
+    findings.push(
+      ...evaluateRestPeriod(
+        input.previousShiftEnd,
+        start,
+        params,
+        input.previousShiftEndIsLowerBound ?? false,
+      ),
+    );
   }
   return findings;
 }

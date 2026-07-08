@@ -56,7 +56,15 @@ function isoDate(date: Date): string {
 }
 
 function toStampEvent(row: StampEventRow): StampEvent {
-  return { id: row.id, kind: row.kind, at: row.occurredAt, correctsId: row.correctsEventId };
+  return {
+    id: row.id,
+    kind: row.kind,
+    at: row.occurredAt,
+    correctsId: row.correctsEventId,
+    // Korrekturweg-Herkunft (auch Nachtraege ohne correctsId): unterscheidet
+    // 'closed' von 'closed_by_correction' (ADR-0019).
+    viaCorrection: row.correctsEventId !== null || row.correctionReason !== null,
+  };
 }
 
 export interface StampStatus {
@@ -138,7 +146,10 @@ export class StampingService {
    */
   private buildView(events: StampEvent[], timeZone: string, ref: Date, now: Date): DayView {
     const days = buildAccountingDays(events, timeZone, ARBZG_2026_V1, now);
-    const state = shiftState(days.flatMap((d) => d.shifts));
+    const state = shiftState(
+      days.flatMap((d) => d.shifts),
+      now,
+    );
     const refMs = ref.getTime();
     let refDay =
       days.find((d) =>

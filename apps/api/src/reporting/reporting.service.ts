@@ -21,7 +21,15 @@ import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-w
 import { WorkLocationService } from '../work-location/work-location.service';
 
 function toStampEvent(row: StampEventRow): StampEvent {
-  return { id: row.id, kind: row.kind, at: row.occurredAt, correctsId: row.correctsEventId };
+  return {
+    id: row.id,
+    kind: row.kind,
+    at: row.occurredAt,
+    correctsId: row.correctsEventId,
+    // Korrekturweg-Herkunft (auch Nachtraege ohne correctsId): unterscheidet
+    // 'closed' von 'closed_by_correction' (ADR-0019).
+    viaCorrection: row.correctsEventId !== null || row.correctionReason !== null,
+  };
 }
 
 /**

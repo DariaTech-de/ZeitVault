@@ -11,6 +11,12 @@ export interface StampEvent {
   id?: string;
   /** Verweis auf das ueberschriebene Ereignis, falls dies eine Korrektur ist. */
   correctsId?: string | null;
+  /**
+   * Ueber den Korrekturweg entstanden (auch Nachtraege ohne correctsId,
+   * z. B. genehmigtes fehlendes clock_out) - unterscheidet 'closed' von
+   * 'closed_by_correction' (ADR-0019).
+   */
+  viaCorrection?: boolean;
 }
 
 /** Erfassungsstatus eines Mitarbeitenden im Tagesverlauf. */
