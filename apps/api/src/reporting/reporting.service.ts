@@ -4,9 +4,11 @@ import {
   type AccountBalance,
   type Finding,
   type StampEvent,
+  averagingWindow,
   buildAccountingDays,
   computeBalances,
   evaluateWeeklyWorkTime,
+  evaluateWorkingTimeAverage,
 } from '@zeitvault/domain';
 import { TenantContextService } from '../common/tenant-context.service';
 import {
@@ -70,6 +72,16 @@ export interface ViolationEntry {
   employeeId: string;
   displayName: string;
   date: string;
+  findings: Finding[];
+}
+
+/** Durchschnittspruefung (B-01/B-04) zum Stichtag. */
+export interface AveragingEntry {
+  employeeId: string;
+  displayName: string;
+  nightWorker: boolean;
+  windowFrom: string;
+  windowTo: string;
   findings: Finding[];
 }
 
@@ -168,6 +180,96 @@ export class ReportingService {
       }
     }
     return entries.sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? -1 : 1));
+  }
+
+  /**
+   * Werktaeglicher 8-h-Durchschnitt zum Stichtag (B-01, § 3 ArbZG);
+   * Nachtarbeitnehmer mit der kuerzeren Periode nach § 6 Abs. 2 (B-04).
+   * Rueckblickendes Fenster - eine Ueberschreitung ist ein sicherer Verstoss.
+   */
+  async workingTimeAverages(to: string): Promise<AveragingEntry[]> {
+    const ctx = this.tenantContext.require();
+    const activeRuleSets = await this.rules.loadActiveRuleSets();
+    const memberships = await this.rules.loadGroupMemberships();
+    const birthDates = await this.rules.loadBirthDates();
+
+    const emps = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      return tx
+        .select({
+          id: employees.id,
+          displayName: employees.displayName,
+          nightWorker: employees.nightWorker,
+        })
+        .from(employees)
+        .where(eq(employees.tenantId, ctx.tenantId));
+    });
+
+    // Fenster je Mitarbeitendem; geladen wird einmal ueber das weiteste.
+    const windows = new Map<string, { from: string; to: string }>();
+    const resolvers = new Map<string, ReturnType<RuleResolutionService['buildResolver']>>();
+    let minFrom = to;
+    for (const emp of emps) {
+      const packageFor = this.rules.buildResolver(
+        this.rules.sourcesFor(activeRuleSets, emp.id, memberships),
+        birthDates.get(emp.id) ?? null,
+      );
+      resolvers.set(emp.id, packageFor);
+      const window = averagingWindow(to, packageFor(to).params, emp.nightWorker);
+      windows.set(emp.id, window);
+      if (window.from < minFrom) minFrom = window.from;
+    }
+
+    const rows = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      const base = await tx
+        .select()
+        .from(stampEvents)
+        .where(and(eq(stampEvents.tenantId, ctx.tenantId), rangeWhere(stampEvents.occurredAt, minFrom, to)))
+        .orderBy(asc(stampEvents.occurredAt));
+      return closeOverCorrections(base, stampCorrectorFetcher(tx, ctx.tenantId));
+    });
+    const byEmployee = new Map<string, StampEventRow[]>();
+    for (const row of rows) {
+      const bucket = byEmployee.get(row.employeeId) ?? [];
+      bucket.push(row);
+      byEmployee.set(row.employeeId, bucket);
+    }
+
+    const entries: AveragingEntry[] = [];
+    const now = new Date();
+    for (const emp of emps) {
+      const window = windows.get(emp.id)!;
+      const packageFor = resolvers.get(emp.id)!;
+      const empRows = byEmployee.get(emp.id) ?? [];
+      if (empRows.length === 0) continue;
+      const resolved = await this.workLocations.resolve(emp.id, window.from);
+      const rangeEnd = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + RANGE_PAD_MS);
+      const materializeAt = now.getTime() < rangeEnd.getTime() ? now : rangeEnd;
+      const days = buildAccountingDays(
+        empRows.map(toStampEvent),
+        resolved.timeZone,
+        packageFor,
+        materializeAt,
+      ).filter((d) => d.date >= window.from && d.date <= to);
+      const findings = evaluateWorkingTimeAverage(
+        days.map((d) => ({ date: d.date, workedMinutes: d.workedMinutes })),
+        to,
+        packageFor,
+        emp.nightWorker,
+      );
+      if (findings.length > 0) {
+        entries.push({
+          employeeId: emp.id,
+          displayName: emp.displayName,
+          nightWorker: emp.nightWorker,
+          windowFrom: window.from,
+          windowTo: to,
+          findings,
+        });
+      }
+    }
+    return entries;
   }
 
   /** Saldenliste: Kontosalden aller Mitarbeitenden des Mandanten. */

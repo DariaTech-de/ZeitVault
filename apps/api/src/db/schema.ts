@@ -48,6 +48,8 @@ export const employees = pgTable(
     displayName: varchar('display_name', { length: 200 }).notNull(),
     /** B-07: nur fuer die JArbSchG-Automatik (Zweckbindung, Migration 0022). */
     birthDate: date('birth_date'),
+    /** B-04: Nachtarbeitnehmer (§ 2 Abs. 5) - kuerzere Ausgleichsperiode. */
+    nightWorker: boolean('night_worker').notNull().default(false),
     // OIDC-Subject (sub) des verknüpften Nutzers; /me löst darüber den
     // Mitarbeiter des angemeldeten Tokens auf.
     externalId: varchar('external_id', { length: 128 }),

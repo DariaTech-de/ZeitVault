@@ -89,6 +89,11 @@ export const PARAM_FAVORABILITY: Readonly<Record<keyof ArbZgRuleParams, Favorabi
   arbzgNightStartMinute: 'neutral',
   arbzgNightEndMinute: 'neutral',
   maxWeeklyMinutes: 'lower',
+  // Kuerzerer Ausgleichszeitraum = schnellerer Ausgleich = schuetzender.
+  averagingPeriodMonths: 'lower',
+  averagingPeriodWeeks: 'lower',
+  nightWorkerAveragingPeriodMonths: 'lower',
+  nightWorkerAveragingPeriodWeeks: 'lower',
   // Enger = schuetzender: spaeterer fruehester Beginn, fruehestes Ende.
   allowedWorkStartMinute: 'higher',
   allowedWorkEndMinute: 'lower',

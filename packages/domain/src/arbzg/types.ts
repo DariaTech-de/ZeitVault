@@ -68,6 +68,15 @@ export interface ArbZgRuleParams {
    */
   maxWorkingTimeMode: 'daily' | 'weekly' | 'daily_and_weekly';
   /**
+   * Ausgleichszeitraum fuer den 8-h-Werktagsdurchschnitt (B-01, § 3 ArbZG):
+   * Monate ODER Wochen - genau einer der beiden Werte ist > 0.
+   */
+  averagingPeriodMonths: number;
+  averagingPeriodWeeks: number;
+  /** Kuerzere Ausgleichsperiode fuer Nachtarbeitnehmer (B-04, § 6 Abs. 2). */
+  nightWorkerAveragingPeriodMonths: number;
+  nightWorkerAveragingPeriodWeeks: number;
+  /**
    * Zulaessiges Beschaeftigungsfenster (Wanduhr-Minuten, lokal): ausserhalb
    * liegender Arbeitsanteil ist ein Verstoss. Erwachsene: 0/1440 (keine
    * Beschraenkung); JArbSchG § 14 (Nachtruhe): 06:00-20:00 (B-07).
@@ -118,6 +127,7 @@ export type FindingCode =
   | 'BREAK_TOO_SHORT'
   | 'CONTINUOUS_WORK_EXCEEDED'
   | 'MAX_WEEKLY_WORKTIME_EXCEEDED'
+  | 'AVERAGING_LIMIT_EXCEEDED'
   | 'WORK_OUTSIDE_ALLOWED_WINDOW'
   | 'SHIFT_UNRESOLVED';
 

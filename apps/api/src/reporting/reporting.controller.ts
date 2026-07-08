@@ -5,6 +5,7 @@ import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../common/tenant.guard';
 import {
+  type AveragingEntry,
   type BalanceListEntry,
   ReportingService,
   type Timesheet,
@@ -43,6 +44,13 @@ export class ReportingController {
   }
 
   /** Saldenliste aller Mitarbeitenden (nur Vorgesetzte/Administration). */
+  /** Durchschnittspruefung B-01/B-04 zum Stichtag (rueckblickendes Fenster). */
+  @Get('averaging')
+  @Roles('manager', 'admin')
+  async averaging(@Query('to') to: string): Promise<AveragingEntry[]> {
+    return this.reporting.workingTimeAverages(isoDateSchema.parse(to));
+  }
+
   @Get('balances')
   @Roles('manager', 'admin')
   async balances(): Promise<BalanceListEntry[]> {

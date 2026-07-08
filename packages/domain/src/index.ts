@@ -5,6 +5,7 @@ export * from './arbzg/layering';
 export * from './arbzg/night';
 export * from './arbzg/weekly';
 export * from './arbzg/work-window';
+export * from './arbzg/averaging';
 export * from './stamping/types';
 export * from './stamping/fold';
 export * from './stamping/shifts';
