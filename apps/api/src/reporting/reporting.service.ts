@@ -7,8 +7,12 @@ import {
   averagingWindow,
   buildAccountingDays,
   computeBalances,
+  evaluateRestCompensation,
   evaluateWeeklyWorkTime,
   evaluateWorkingTimeAverage,
+  foldShifts,
+  restPeriodsFromShifts,
+  trimLeadingWindowCut,
 } from '@zeitvault/domain';
 import { TenantContextService } from '../common/tenant-context.service';
 import {
@@ -177,6 +181,18 @@ export class ReportingService {
         if (day.findings.length > 0) {
           entries.push({ employeeId, displayName, date: day.date, findings: day.findings });
         }
+      }
+      // B-03 (§ 5 Abs. 2): verkuerzte Ruhezeiten brauchen ihren 12-h-Ausgleich
+      // binnen Frist - Warnung vor Fristablauf, Verstoss nach Fristablauf.
+      const shifts = foldShifts(trimLeadingWindowCut(empRows.map(toStampEvent)));
+      const restFindings = evaluateRestCompensation(
+        restPeriodsFromShifts(shifts),
+        to,
+        packageFor,
+        new Date(),
+      ).filter((r) => r.date >= from && r.date <= to);
+      for (const r of restFindings) {
+        entries.push({ employeeId, displayName, date: r.date, findings: [r.finding] });
       }
     }
     return entries.sort((a, b) => (a.date === b.date ? 0 : a.date < b.date ? -1 : 1));

@@ -68,6 +68,15 @@ export interface ArbZgRuleParams {
    */
   maxWorkingTimeMode: 'daily' | 'weekly' | 'daily_and_weekly';
   /**
+   * Ruhezeit-Ausgleich (B-03, § 5 Abs. 2): Verkuerzungen unter diese
+   * Baseline (gesetzlich 11 h) muessen binnen Frist durch eine Ruhezeit von
+   * mindestens `restCompensationMinutes` (12 h) ausgeglichen werden.
+   */
+  restCompensationBaselineMinutes: number;
+  restCompensationMinutes: number;
+  restCompensationPeriodMonths: number;
+  restCompensationPeriodWeeks: number;
+  /**
    * Ausgleichszeitraum fuer den 8-h-Werktagsdurchschnitt (B-01, § 3 ArbZG):
    * Monate ODER Wochen - genau einer der beiden Werte ist > 0.
    */
@@ -128,6 +137,8 @@ export type FindingCode =
   | 'CONTINUOUS_WORK_EXCEEDED'
   | 'MAX_WEEKLY_WORKTIME_EXCEEDED'
   | 'AVERAGING_LIMIT_EXCEEDED'
+  | 'REST_COMPENSATION_MISSING'
+  | 'REST_COMPENSATION_PENDING'
   | 'WORK_OUTSIDE_ALLOWED_WINDOW'
   | 'SHIFT_UNRESOLVED';
 
