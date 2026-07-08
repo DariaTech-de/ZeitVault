@@ -48,6 +48,10 @@ export const ruleParamsSchema = z
     openShiftGraceMinutes: z.number().int().min(0),
     arbzgNightStartMinute: z.number().int().min(0).max(1439),
     arbzgNightEndMinute: z.number().int().min(0).max(1439),
+    roundingClockIn: z.enum(['none', 'nearest_minute', 'down_minute', 'up_minute']),
+    roundingBreakStart: z.enum(['none', 'nearest_minute', 'down_minute', 'up_minute']),
+    roundingBreakEnd: z.enum(['none', 'nearest_minute', 'down_minute', 'up_minute']),
+    roundingClockOut: z.enum(['none', 'nearest_minute', 'down_minute', 'up_minute']),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, {

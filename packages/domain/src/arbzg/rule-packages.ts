@@ -27,6 +27,11 @@ export const ARBZG_2026_V1: RulePackage = {
     maxContinuousWorkMinutes: 6 * 60,
     arbzgNightStartMinute: 23 * 60,
     arbzgNightEndMinute: 6 * 60,
+    // B-12: Rundung NIE als Voreinstellung - nur per BV-Regelsatz.
+    roundingClockIn: 'none',
+    roundingBreakStart: 'none',
+    roundingBreakEnd: 'none',
+    roundingClockOut: 'none',
     // System-Grundwert der Kulanzfrist (ADR-0019); abweichend nur per TV/BV.
     openShiftGraceMinutes: 16 * 60,
   },

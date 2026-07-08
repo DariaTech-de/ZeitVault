@@ -58,3 +58,21 @@ export function applyStampRounding(
 ): Date {
   return roundStampTime(at, config[kind]);
 }
+
+/**
+ * Rundungskonfiguration aus dem wirksamen Regelwerk (B-12): die vier
+ * `rounding*`-Parameter eines aufgeloesten Regelpakets als StampRoundingConfig.
+ */
+export function stampRoundingConfigFrom(params: {
+  roundingClockIn: StampRoundingMode;
+  roundingBreakStart: StampRoundingMode;
+  roundingBreakEnd: StampRoundingMode;
+  roundingClockOut: StampRoundingMode;
+}): StampRoundingConfig {
+  return {
+    clock_in: params.roundingClockIn,
+    break_start: params.roundingBreakStart,
+    break_end: params.roundingBreakEnd,
+    clock_out: params.roundingClockOut,
+  };
+}

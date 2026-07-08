@@ -1,3 +1,5 @@
+import type { StampRoundingMode } from '../stamping/rounding';
+
 /** Ein gearbeitetes Zeitintervall (Arbeitszeit, ohne Pausen). */
 export interface WorkInterval {
   start: Date;
@@ -53,6 +55,16 @@ export interface ArbZgRuleParams {
   arbzgNightStartMinute: number;
   /** ArbZG-Nachtzeit, Ende (exklusiv; 06:00 = 360; Baecker 05:00). */
   arbzgNightEndMinute: number;
+  /**
+   * Rundung der Stempelzeit je Ereignisart (B-12): setzt am EREIGNIS beim
+   * Eintragen an, nie je Intervall/Zeitscheibe. Standard IMMER 'none';
+   * jede Abweichung ist mitbestimmungspflichtig (BV-Referenz, § 87 Abs. 1
+   * Nr. 2 BetrVG) und durch den Regelsatz dokumentiert/auditiert.
+   */
+  roundingClockIn: StampRoundingMode;
+  roundingBreakStart: StampRoundingMode;
+  roundingBreakEnd: StampRoundingMode;
+  roundingClockOut: StampRoundingMode;
   /**
    * Kulanzfrist (ADR-0019): Solange das letzte Ereignis einer nicht beendeten
    * Schicht juenger ist, gilt sie als 'open'; danach als 'unresolved'.

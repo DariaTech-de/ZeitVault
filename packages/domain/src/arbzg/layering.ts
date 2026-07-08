@@ -88,15 +88,22 @@ export const PARAM_FAVORABILITY: Readonly<Record<keyof ArbZgRuleParams, Favorabi
   // Branchenfenster (Baecker 22-5): tarifgebunden, keine Schutzrichtung.
   arbzgNightStartMinute: 'neutral',
   arbzgNightEndMinute: 'neutral',
+  // B-12: Rundungsmodi sind BV-gebunden; asymmetrische Regeln sind abbildbar,
+  // aber nie Default und nie individuell.
+  roundingClockIn: 'neutral',
+  roundingBreakStart: 'neutral',
+  roundingBreakEnd: 'neutral',
+  roundingClockOut: 'neutral',
 };
 
 /** Ist `candidate` gegenueber `current` eine Verschlechterung fuer Beschaeftigte? */
 function isLessProtective(
   key: keyof ArbZgRuleParams,
-  candidate: number,
-  current: number,
+  candidate: ArbZgRuleParams[keyof ArbZgRuleParams],
+  current: ArbZgRuleParams[keyof ArbZgRuleParams],
 ): boolean {
   const direction = PARAM_FAVORABILITY[key];
+  if (typeof candidate !== 'number' || typeof current !== 'number') return false;
   if (direction === 'lower') return candidate > current;
   if (direction === 'higher') return candidate < current;
   return false;
@@ -172,7 +179,7 @@ export function resolveEffectiveParams(
         );
       }
 
-      params[key] = value;
+      (params as unknown as Record<string, number | string>)[key] = value;
       provenance[key] = { layer, source: setter.name };
     }
   }

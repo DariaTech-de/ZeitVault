@@ -13,10 +13,12 @@ import {
   type StampKind,
   StampTransitionError,
   type StampState,
+  applyStampRounding,
   buildAccountingDays,
   foldShifts,
   localDateOf,
   shiftState,
+  stampRoundingConfigFrom,
 } from '@zeitvault/domain';
 import type { StampLocation } from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
@@ -195,10 +197,15 @@ export class StampingService {
   }): Promise<StampResult> {
     const ctx = this.tenantContext.require();
     const now = new Date();
-    // TODO(B-12): Hier setzt die konfigurierbare Ereignis-Rundung an
-    // (applyStampRounding je Mandant/Betriebsvereinbarung, Standard 'none') -
-    // gerundet wird am EREIGNIS beim Eintragen, nie je Intervall/Zeitscheibe.
-    const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
+    // B-12: Konfigurierte Rundung setzt am EREIGNIS beim Eintragen an
+    // (Standard 'none'; Abweichung nur per BV-Regelsatz). Korrekturen
+    // uebernehmen den ausdruecklich eingegebenen Zeitpunkt UNVERAENDERT.
+    const packageFor = await this.rules.resolverFor(input.employeeId);
+    const rawOccurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
+    const roundingConfig = stampRoundingConfigFrom(
+      packageFor(isoDate(rawOccurredAt)).params,
+    );
+    const occurredAt = applyStampRounding(input.kind, rawOccurredAt, roundingConfig);
 
     // A-03: Nacherfassung > 24 h nach der Arbeitsleistung nur mit Begruendung;
     // der Eintrag wird dauerhaft als late_entry markiert.
@@ -271,6 +278,13 @@ export class StampingService {
         kind: input.kind,
         occurredAt: occurredAt.toISOString(),
         source: input.source,
+        // B-12: Rundung ist im manipulationsevidenten Trail sichtbar.
+        ...(occurredAt.getTime() !== rawOccurredAt.getTime()
+          ? {
+              rounding: roundingConfig[input.kind],
+              rawOccurredAt: rawOccurredAt.toISOString(),
+            }
+          : {}),
         ...(input.workLocationId ? { workLocationId: input.workLocationId } : {}),
         ...(isLate ? { lateEntry: true, lateReason: input.reason ?? '' } : {}),
       },
@@ -281,7 +295,6 @@ export class StampingService {
       isoDate(occurredAt),
       input.workLocationId ?? null,
     );
-    const packageFor = await this.rules.resolverFor(input.employeeId);
     const view = this.buildView(result.events, resolved.timeZone, occurredAt, now, packageFor);
     return { event: row, status: view.status, findings: view.findings };
   }
@@ -485,6 +498,8 @@ export class StampingService {
       [];
     let summary = { accepted: 0, duplicates: 0 };
     const evaluate = await this.geofence.buildEvaluator();
+    // B-12: Offline-Erfassung ist Erfassung - dieselbe Ereignis-Rundung.
+    const packageFor = await this.rules.resolverFor(input.employeeId);
 
     const times = input.items.map((it) => new Date(it.occurredAt).getTime());
     const from = new Date(Math.min(...times) - EVENT_WINDOW_MS);
@@ -515,7 +530,12 @@ export class StampingService {
 
         let accepted = 0;
         for (const it of fresh) {
-          const occurredAt = new Date(it.occurredAt);
+          const rawAt = new Date(it.occurredAt);
+          const occurredAt = applyStampRounding(
+            it.kind,
+            rawAt,
+            stampRoundingConfigFrom(packageFor(isoDate(rawAt)).params),
+          );
           const isLate = now.getTime() - occurredAt.getTime() > LATE_ENTRY_MS;
           const geo = evaluate(it.location);
           const inserted = await tx

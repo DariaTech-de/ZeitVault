@@ -224,7 +224,7 @@ export const ruleSets = pgTable(
     employeeId: uuid('employee_id'),
     validFrom: date('valid_from').notNull(),
     validTo: date('valid_to'),
-    params: jsonb('params').notNull().$type<Record<string, number>>(),
+    params: jsonb('params').notNull().$type<Record<string, number | string>>(),
     active: boolean('active').notNull().default(true),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
