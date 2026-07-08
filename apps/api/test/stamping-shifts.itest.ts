@@ -35,6 +35,18 @@ beforeAll(async () => {
   const workLocations = new WorkLocationService(db, tenantContext, auditStub);
   stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations);
 
+  // Standard-Einsatzort ist Pflicht-Stammdatum: ohne ihn wirft resolve()
+  // (bewusst kein Zeitzonen-Fallback).
+  await tenantContext.run({ tenantId: TENANT, userId: 'itest', roles: ['admin'] }, () =>
+    workLocations.create({
+      name: 'Werk Muenchen',
+      countryCode: 'DE',
+      stateCode: 'BY',
+      timeZone: 'Europe/Berlin',
+      isDefault: true,
+    }),
+  );
+
   const emp = await withTenant(pool, TENANT, (c) =>
     c.query(
       `insert into employees (tenant_id, personnel_number, display_name)

@@ -24,7 +24,7 @@ import {
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
 import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-window';
-import { FALLBACK_TIME_ZONE, WorkLocationService } from '../work-location/work-location.service';
+import { WorkLocationService } from '../work-location/work-location.service';
 
 const WINDOW_DAYS = 14;
 /** Vorlauf, damit Schichten mit Beginn vor dem Fenster vollstaendig laden. */
@@ -62,11 +62,11 @@ export class DashboardService {
    * je ABRECHNUNGSTAG berechnet (lokaler Tag des Schichtbeginns in der
    * Einsatzort-Zeitzone des Mitarbeitenden, ADR-0016/0018) - dieselbe Logik
    * wie Heute-Ansicht und Report. Die Achsen-Tage des Charts laufen in der
-   * Fallback-Zeitzone (deutscher Markt).
+   * Zeitzone des Mandanten-Default-Einsatzortes (Pflicht-Stammdatum).
    */
   async getDashboard(now: Date = new Date()): Promise<DashboardData> {
     const ctx = this.tenantContext.require();
-    const axisTz = FALLBACK_TIME_ZONE;
+    const axisTz = (await this.workLocations.tenantDefault()).timeZone;
     const todayKey = localDateOf(now, axisTz);
     const windowDates: string[] = [];
     for (let i = WINDOW_DAYS - 1; i >= 0; i -= 1) {

@@ -1,4 +1,10 @@
-import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { and, asc, desc, eq, sql } from 'drizzle-orm';
 import { assertValidTimeZone } from '@zeitvault/domain';
 import type {
@@ -19,11 +25,14 @@ import {
 import { DB, type Database } from '../db/tokens';
 
 /**
- * Fallback-Zeitzone, wenn weder Uebersteuerung noch Zuordnung noch
- * Mandanten-Default existieren. Produkt fuer den deutschen Markt (ADR-0016);
- * die Aufloesungsherkunft ist am Ergebnis ablesbar ('fallback').
+ * Es gibt KEINE Fallback-Zeitzone: Der Mandanten-Default-Einsatzort ist ein
+ * Pflicht-Stammdatum (Seed/Onboarding legt ihn an). Eine stille Annahme wie
+ * 'Europe/Berlin' wuerde Abrechnungstage und (ab Schnitt 4) Zuschlaege leise
+ * falsch bewerten - lautes Scheitern schlaegt leise falsche Bewertung.
  */
-export const FALLBACK_TIME_ZONE = 'Europe/Berlin';
+const MISSING_DEFAULT_MESSAGE =
+  'Kein Einsatzort auflösbar: Für den Mandanten ist kein Standard-Einsatzort ' +
+  'hinterlegt. Bitte unter Einsatzorte einen Standard-Einsatzort anlegen (Pflicht-Stammdatum).';
 
 function toSummary(row: WorkLocationRow): WorkLocationSummary {
   return {
@@ -214,10 +223,30 @@ export class WorkLocationService {
     );
   }
 
+  /** Standard-Einsatzort des Mandanten (Pflicht-Stammdatum); wirft, wenn er fehlt. */
+  async tenantDefault(): Promise<WorkLocationSummary> {
+    const rows = await this.tx(async (tx, tenantId) =>
+      tx
+        .select()
+        .from(workLocations)
+        .where(
+          and(
+            eq(workLocations.tenantId, tenantId),
+            eq(workLocations.isDefault, true),
+            eq(workLocations.active, true),
+          ),
+        )
+        .limit(1),
+    );
+    if (!rows[0]) throw new ConflictException(MISSING_DEFAULT_MESSAGE);
+    return toSummary(rows[0]);
+  }
+
   /**
    * Loest den fuer Mitarbeitenden + Datum wirksamen Einsatzort auf (ADR-0016):
    * Uebersteuerung (Stempel) > Zuordnung (juengstes validFrom, das das Datum
-   * abdeckt) > Mandanten-Default > Fallback Europe/Berlin. Die Herkunft ist am
+   * abdeckt) > Mandanten-Default. Existiert keiner davon, wird geworfen -
+   * es gibt bewusst KEINEN stillen Zeitzonen-Fallback. Die Herkunft ist am
    * Ergebnis ablesbar; Bewertungen speichern das Ergebnis als Snapshot (F-05).
    */
   async resolve(
@@ -248,7 +277,7 @@ export class WorkLocationService {
         .orderBy(desc(employeeWorkLocations.validFrom))
         .limit(1);
       if (assigned[0]) return toResolved(assigned[0].loc, 'employee_assignment');
-      const fallback = await tx
+      const tenantDefault = await tx
         .select()
         .from(workLocations)
         .where(
@@ -259,15 +288,8 @@ export class WorkLocationService {
           ),
         )
         .limit(1);
-      if (fallback[0]) return toResolved(fallback[0], 'tenant_default');
-      return {
-        workLocationId: null,
-        timeZone: FALLBACK_TIME_ZONE,
-        countryCode: 'DE',
-        stateCode: null,
-        municipalityCode: null,
-        resolvedFrom: 'fallback',
-      };
+      if (tenantDefault[0]) return toResolved(tenantDefault[0], 'tenant_default');
+      throw new ConflictException(MISSING_DEFAULT_MESSAGE);
     });
   }
 }

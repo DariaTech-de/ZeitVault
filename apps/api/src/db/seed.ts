@@ -26,6 +26,16 @@ async function main(): Promise<void> {
     try {
       await client.query('BEGIN');
       await client.query("select set_config('app.tenant_id', 'default', true)");
+      // Standard-Einsatzort ist Pflicht-Stammdatum (ADR-0016): ohne ihn ist
+      // keine Bewertung aufloesbar (es gibt bewusst keinen Zeitzonen-Fallback).
+      await client.query(
+        `insert into work_locations (tenant_id, name, country_code, state_code, time_zone, is_default)
+         select 'default', 'Hauptstandort', 'DE', 'BE', 'Europe/Berlin', true
+         where not exists (
+           select 1 from work_locations
+           where tenant_id = 'default' and is_default = true and active = true
+         )`,
+      );
       for (const [personnelNumber, displayName, externalId] of employees) {
         await client.query(
           `insert into employees (tenant_id, personnel_number, display_name, external_id)

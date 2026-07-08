@@ -52,11 +52,15 @@ export interface WorkLocationSummary {
  * Abrechnungen nicht still umschreiben (F-05).
  */
 export interface ResolvedWorkLocation {
-  workLocationId: string | null;
+  workLocationId: string;
   timeZone: string;
   countryCode: string;
   stateCode: string | null;
   municipalityCode: string | null;
-  /** Herkunft der Aufloesung (Uebersteuerung > Zuordnung > Mandanten-Default > Fallback). */
-  resolvedFrom: 'entry_override' | 'employee_assignment' | 'tenant_default' | 'fallback';
+  /**
+   * Herkunft der Aufloesung (Uebersteuerung > Zuordnung > Mandanten-Default).
+   * Es gibt bewusst KEINEN stillen Fallback: fehlt der Mandanten-Default,
+   * scheitert die Aufloesung laut (Pflicht-Stammdatum).
+   */
+  resolvedFrom: 'entry_override' | 'employee_assignment' | 'tenant_default';
 }

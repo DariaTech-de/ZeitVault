@@ -215,6 +215,19 @@ curl -s https://APP_DOMAIN/api/admin/employees \
 > Keycloak-`sub`). Sitzplätze werden über die Lizenz begrenzt (Bereich
 > **Verwaltung → Lizenz**; ohne Lizenz gilt der Testmodus).
 
+**d) Standard-Einsatzort anlegen (Pflicht-Stammdatum).** Der Einsatzort
+bestimmt Zeitzone (Tagesgrenzen der Bewertung) und Bundesland
+(Feiertagsrecht). Ohne aktiven Standard-Einsatzort lehnt die API Bewertungen
+mit einem klaren Fehler ab – es gibt bewusst **keinen** stillen
+Zeitzonen-Fallback. Der Seed (`pnpm --filter @zeitvault/api seed`) legt für
+den Demo-Mandanten einen Standard an; produktiv per API:
+
+```bash
+curl -s https://APP_DOMAIN/api/work-locations \
+  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"name":"Hauptstandort","countryCode":"DE","stateCode":"BY","timeZone":"Europe/Berlin","isDefault":true}'
+```
+
 **Passkey aktivieren (optional, empfohlen):** Nutzer öffnen
 `https://AUTH_DOMAIN/realms/zeitvault/account` → *Signieren-Sie-sich-an* →
 Passkey hinzufügen. Danach Login per Passkey statt Passwort (HTTPS ist bereits

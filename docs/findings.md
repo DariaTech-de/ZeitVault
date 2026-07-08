@@ -5,15 +5,14 @@ im passenden Schnitt bearbeitet.
 
 ## Aus Schnitt 1 (2026-07-08)
 
-1. **Implicit-Close bei vergessenem Ausstempeln — fachlich bestätigen.**
-   Ein `clock_in` nach > 12 h Inaktivität schließt die hängende Schicht implizit
-   an ihrem letzten Ereignis (`Shift.endedImplicitly`); das offene Segment zählt
-   NICHT als Arbeitszeit, die Korrektur läuft über den Anpassungsantrag. Ohne
-   diese Regel wären Mitarbeitende nach vergessenem `clock_out` dauerhaft
-   blockiert (das alte UTC-Tagesfenster maskierte das Problem). Kein
-   synthetisches Ereignis (ADR-0017/GoBD). Offen: Sichtbarkeit im Report/UI
-   (gehört zu G-04 „Erfassungslücken"), und die 12-h-Grenze ist eine gesetzte
-   Konvention — Produktentscheidung bestätigen.
+1. **Implicit-Close bei vergessenem Ausstempeln — VERWORFEN (PO-Entscheidung
+   2026-07-08).** Die 12-h-Regel definierte reale §-5-/§-4-Verstöße weg
+   (16-h-Schicht ohne Pause „endet" nach Faltung am letzten Ereignis) und
+   blockierte legitime lange Schichten mit erfasster Pause. Ersatz ist das
+   **unresolved-Zustandsmodell** ([ADR-0019](adr/0019-unresolved-schichten.md)):
+   `clock_in` ist immer erfolgreich, die nicht beendete Vorschicht wird
+   `unresolved` (Ende bleibt unbekannt, `workedAtLeastUntil` ist ausdrücklich
+   eine Untergrenze), Auflösung ausschließlich durch Menschen.
 2. **`time`-Modul (direkter `time_entries`-Schreibpfad) noch nicht konsolidiert.**
    Gemäß ADR-0017 wird `time_entries` zur deterministischen Projektion; die
    Umsetzung erfolgt mit der Zeitscheiben-Pipeline in Schnitt 4. Bis dahin
@@ -22,10 +21,12 @@ im passenden Schnitt bearbeitet.
    wird in der API nicht mehr genutzt, bleibt aber exportiert (Domain-Tests,
    Abwärtskompatibilität). Aufräumen, wenn Schnitt 4 die letzten Verbraucher
    (Vorschau-Endpunkte) migriert.
-4. **Dashboard:** Chart-Achse läuft in der Fallback-Zeitzone (Europe/Berlin);
-   `presentNow` ist jetzt schichtbasiert (offene Schicht zählt unabhängig vom
-   Kalendertag). Mandanten mit Einsatzorten in mehreren Zeitzonen sehen die
-   Tageszuordnung je Mitarbeiter-Zeitzone, Achse bleibt DE.
+4. **Dashboard:** Chart-Achse läuft in der Zeitzone des
+   Mandanten-Default-Einsatzortes (der Europe/Berlin-Fallback wurde entfernt,
+   der Default ist Pflicht-Stammdatum); `presentNow` ist schichtbasiert
+   (offene Schicht zählt unabhängig vom Kalendertag). Mandanten mit
+   Einsatzorten in mehreren Zeitzonen sehen die Tageszuordnung je
+   Mitarbeiter-Zeitzone, die Achse bleibt die des Default-Einsatzortes.
 5. **GoBD-Rohdatenexport (`runGobd`) behält bewusst UTC-Periodengrenzen**
    (Rohdaten, reproduzierbare Prüfsumme; Kommentar im Code). Die fachliche
    Periodensemantik wird mit F-03/F-05 (Schnitt 5) formalisiert — Checksummen
@@ -33,8 +34,28 @@ im passenden Schnitt bearbeitet.
 6. **Reporting-Zeitzonenauflösung** je Mitarbeiter nutzt den Zeitraumbeginn;
    Einsatzort-Wechsel INNERHALB eines Berichtszeitraums werden erst mit der
    Zeitscheiben-Pipeline (Schnitt 4) tag-genau aufgelöst.
-7. **Web-UI zeigt `lateEntry`/`endedImplicitly` noch nicht an** — die API
-   liefert die Felder (DayListing) bereits; UI-Kennzeichnung nachziehen.
+7. **Web-UI zeigt `lateEntry` und unaufgelöste Schichten noch nicht an** — die
+   API liefert die Felder (DayListing) bereits; UI-Kennzeichnung nachziehen
+   (Beschriftung „mindestens bis" für `workedAtLeastUntil`, ADR-0019).
 8. **B-03-Live-Ruhezeitprüfung** fiel als Nebeneffekt der gemeinsamen
    Tagessicht an (previousShiftEnd wird beim Stempeln verkettet). Die
    10-h-Ausnahme mit Ausgleich bleibt Schnitt 3.
+
+## Aus dem adversarialen Review zu Schnitt 1 (2026-07-08)
+
+9. **Mandanten-Default und `active` von Einsatzorten haben keine
+   Gültigkeitshistorie** (anders als `employee_work_locations`): Ein
+   Default-Wechsel oder `deactivate()` ändert rückwirkend die Auflösung —
+   und damit Abrechnungstag/Zeitzone — bereits bewerteter, nicht
+   eingefrorener Tage. Endgültige Antwort ist der persistierte
+   **Bewertungs-Snapshot** (ADR-0016), der mit der Zeitscheiben-Pipeline
+   (Schnitt 4) und dem Perioden-Freeze (F-03/F-05, Schnitt 5) kommt; bis
+   dahin ist das GoBD-Spannungsfeld hier dokumentiert. Bei Bedarf zusätzlich
+   Gültigkeitshistorie für den Default (`valid_from`/`valid_to`) erwägen.
+10. **AuditEvents werden nach dem DB-Commit an den Ledger gesendet** (alle
+    Schreibpfade, nicht nur Schnitt 1): Ist der Ledger-Dienst nicht
+    erreichbar, existiert die Änderung dauerhaft ohne Ledger-Event
+    (Kern-Invariante 2 verletzt sich im Fehlerfall leise). Benötigt eine
+    Architekturentscheidung (transaktionale Outbox oder Kompensation) —
+    spätestens mit dem Perioden-Freeze (Schnitt 5), der auf
+    Ledger-Vollständigkeit angewiesen ist.
