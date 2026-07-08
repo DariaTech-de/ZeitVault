@@ -6,7 +6,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { and, asc, eq, sql } from 'drizzle-orm';
-import { type StampEvent, StampTransitionError, foldShifts } from '@zeitvault/domain';
+import { type StampEvent, StampTransitionError, foldShifts, trimLeadingWindowCut } from '@zeitvault/domain';
 import type { CreateCorrectionRequest } from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
@@ -141,8 +141,9 @@ export class CorrectionService {
             correctsId: target?.id,
           };
           // Wirft StampTransitionError bei ungueltiger SCHICHTFOLGE -> 409
-          // (Schichten duerfen Mitternacht ueberschreiten, K-02/K-03).
-          foldShifts([...existing.map(toStampEvent), corrective]);
+          // (Schichten duerfen Mitternacht ueberschreiten, K-02/K-03);
+          // Fenster-Beschnitt am Rand wird toleriert.
+          foldShifts([...trimLeadingWindowCut(existing.map(toStampEvent)), corrective]);
           // A-03: genehmigter Nachtrag/Korrektur > 24 h nach dem Zeitpunkt ist
           // eine Nacherfassung; die Antrags-Begruendung ist der Pflichtgrund.
           const isLate = Date.now() - req.proposedOccurredAt.getTime() > LATE_ENTRY_MS;

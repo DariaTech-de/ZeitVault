@@ -20,13 +20,21 @@ import {
   selectRulePackage,
 } from '@zeitvault/domain';
 import {
+  assignEmployeeGroupSchema,
   createCollectiveAgreementSchema,
+  createEmployeeGroupSchema,
   createRuleSetSchema,
 } from '@zeitvault/types';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../common/tenant.guard';
-import type { CollectiveAgreementRow, ReprocessingRunRow, RuleSetRow } from '../db/schema';
+import type {
+  CollectiveAgreementRow,
+  EmployeeGroupMemberRow,
+  EmployeeGroupRow,
+  ReprocessingRunRow,
+  RuleSetRow,
+} from '../db/schema';
 import { ReprocessingService } from './reprocessing.service';
 import { RuleResolutionService } from './rule-resolution.service';
 import { RulesService } from './rules.service';
@@ -82,6 +90,24 @@ export class RulesController {
   async deactivateRuleSet(@Param('id') id: string): Promise<{ ok: true }> {
     await this.rules.deactivateRuleSet(uuidSchema.parse(id));
     return { ok: true };
+  }
+
+  @Post('groups')
+  @Roles('admin')
+  async createGroup(@Body() body: unknown): Promise<EmployeeGroupRow> {
+    return this.rules.createGroup(createEmployeeGroupSchema.parse(body));
+  }
+
+  @Get('groups')
+  @Roles('manager', 'admin')
+  async listGroups(): Promise<EmployeeGroupRow[]> {
+    return this.rules.listGroups();
+  }
+
+  @Post('groups/assignments')
+  @Roles('admin')
+  async assignGroupMember(@Body() body: unknown): Promise<EmployeeGroupMemberRow> {
+    return this.rules.assignGroupMember(assignEmployeeGroupSchema.parse(body));
   }
 
   /** Protokollierte Neubewertungs-Laeufe (B-10). */

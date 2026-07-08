@@ -10,7 +10,12 @@ import {
   selectRulePackage,
 } from '@zeitvault/domain';
 import { TenantContextService } from '../common/tenant-context.service';
-import { type RuleSetRow, ruleSets } from '../db/schema';
+import {
+  type EmployeeGroupMemberRow,
+  type RuleSetRow,
+  employeeGroupMembers,
+  ruleSets,
+} from '../db/schema';
 import { DB, type Database } from '../db/tokens';
 
 /** (Datum) -> wirksames Regelpaket; wirft ConflictException bei Regel-Konflikt. */
@@ -47,11 +52,34 @@ export class RuleResolutionService {
     });
   }
 
-  /** Quellen fuer einen Mitarbeitenden: Mandanten-Ebenen + SEINE individuellen Saetze. */
-  sourcesFor(rows: readonly RuleSetRow[], employeeId?: string): RuleSetSource[] {
-    return rows
-      .filter((r) => r.layer !== 'individual' || (employeeId && r.employeeId === employeeId))
-      .map((r) => ({
+  /** Alle Gruppen-Mitgliedschaften des Mandanten (eine Abfrage). */
+  async loadGroupMemberships(): Promise<EmployeeGroupMemberRow[]> {
+    const ctx = this.tenantContext.require();
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      return tx
+        .select()
+        .from(employeeGroupMembers)
+        .where(eq(employeeGroupMembers.tenantId, ctx.tenantId));
+    });
+  }
+
+  /**
+   * Quellen fuer einen Mitarbeitenden: mandantenweite Saetze + SEINE
+   * individuellen Saetze + gruppen-gescopte Saetze (B-11), deren Gueltigkeit
+   * mit seinen Mitgliedschafts-Intervallen geschnitten wird - die Domain-
+   * Aufloesung bleibt dadurch rein datumsbasiert.
+   */
+  sourcesFor(
+    rows: readonly RuleSetRow[],
+    employeeId?: string,
+    memberships: readonly EmployeeGroupMemberRow[] = [],
+  ): RuleSetSource[] {
+    const sources: RuleSetSource[] = [];
+    const mine = employeeId ? memberships.filter((m) => m.employeeId === employeeId) : [];
+    for (const r of rows) {
+      if (r.layer === 'individual' && (!employeeId || r.employeeId !== employeeId)) continue;
+      const base: RuleSetSource = {
         id: r.id,
         name: r.name,
         layer: r.layer,
@@ -59,7 +87,20 @@ export class RuleResolutionService {
         validFrom: r.validFrom,
         validTo: r.validTo,
         params: r.params,
-      }));
+      };
+      if (!r.employeeGroupId) {
+        sources.push(base);
+        continue;
+      }
+      for (const m of mine.filter((mm) => mm.groupId === r.employeeGroupId)) {
+        const from = m.validFrom > r.validFrom ? m.validFrom : r.validFrom;
+        const toCandidates = [m.validTo, r.validTo].filter((x): x is string => x !== null);
+        const to = toCandidates.length > 0 ? toCandidates.sort()[0]! : null;
+        if (to !== null && from > to) continue;
+        sources.push({ ...base, validFrom: from, validTo: to });
+      }
+    }
+    return sources;
   }
 
   /** Baut aus Quellen einen (Datum)->Paket-Resolver (rein, synchron). */
@@ -81,11 +122,13 @@ export class RuleResolutionService {
   /** Bequemer Einstieg fuer Einzel-Mitarbeiter-Pfade (Stempeln, Heute, Timesheet). */
   async resolverFor(employeeId?: string): Promise<RulePackageResolver> {
     const rows = await this.loadActiveRuleSets();
-    return this.buildResolver(this.sourcesFor(rows, employeeId));
+    const memberships = employeeId ? await this.loadGroupMemberships() : [];
+    return this.buildResolver(this.sourcesFor(rows, employeeId, memberships));
   }
 
   /** Quellen fuer die Herkunfts-Anzeige (GET /rules/effective). */
   async loadSources(employeeId?: string): Promise<RuleSetSource[]> {
-    return this.sourcesFor(await this.loadActiveRuleSets(), employeeId);
+    const memberships = employeeId ? await this.loadGroupMemberships() : [];
+    return this.sourcesFor(await this.loadActiveRuleSets(), employeeId, memberships);
   }
 }

@@ -158,11 +158,12 @@ export class DashboardService {
     let weekMinutes = 0;
     let presentNow = 0;
     const activeRuleSets = await this.rules.loadActiveRuleSets();
+    const memberships = await this.rules.loadGroupMemberships();
     for (const [employeeId, events] of byEmployee) {
       try {
         const tz = (await this.workLocations.resolve(employeeId, todayKey)).timeZone;
         const packageFor = this.rules.buildResolver(
-          this.rules.sourcesFor(activeRuleSets, employeeId),
+          this.rules.sourcesFor(activeRuleSets, employeeId, memberships),
         );
         const days = buildAccountingDays(events, tz, packageFor, now);
         const graceMs = packageFor(localDateOf(now, tz)).params.openShiftGraceMinutes * 60_000;

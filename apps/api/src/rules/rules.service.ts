@@ -14,13 +14,22 @@ import {
   resolveEffectiveParams,
   selectRulePackage,
 } from '@zeitvault/domain';
-import type { CreateCollectiveAgreement, CreateRuleSet } from '@zeitvault/types';
+import type {
+  AssignEmployeeGroup,
+  CreateCollectiveAgreement,
+  CreateEmployeeGroup,
+  CreateRuleSet,
+} from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
 import {
   type CollectiveAgreementRow,
+  type EmployeeGroupMemberRow,
+  type EmployeeGroupRow,
   type RuleSetRow,
   collectiveAgreements,
+  employeeGroupMembers,
+  employeeGroups,
   employees,
   ruleSets,
 } from '../db/schema';
@@ -181,6 +190,17 @@ export class RulesService {
           .where(and(eq(employees.tenantId, tenantId), eq(employees.id, input.employeeId!)));
         if (!emp[0]) throw new NotFoundException('Mitarbeitender nicht gefunden.');
       }
+      if (input.employeeGroupId) {
+        const grp = await tx
+          .select({ id: employeeGroups.id, active: employeeGroups.active })
+          .from(employeeGroups)
+          .where(
+            and(eq(employeeGroups.tenantId, tenantId), eq(employeeGroups.id, input.employeeGroupId)),
+          );
+        if (!grp[0] || !grp[0].active) {
+          throw new BadRequestException('Mitarbeitergruppe nicht gefunden oder inaktiv.');
+        }
+      }
 
       // Probe-Aufloesung gegen die aktiven Saetze an allen Grenzdaten.
       const existing = await tx
@@ -195,9 +215,17 @@ export class RulesService {
         validTo: input.validTo ?? null,
         params: input.params,
       };
+      // Probe: gruppen-gescopte Saetze ANDERER Gruppen gelten nie fuer
+      // dieselbe Person wie der Kandidat mit seinem Scope - Konflikte durch
+      // ueberlappende Mitgliedschaften werden zur Bewertungszeit gemeldet.
       const sources: RuleSetSource[] = [
         ...existing
           .filter((r) => r.layer !== 'individual' || r.employeeId === (input.employeeId ?? null))
+          .filter(
+            (r) =>
+              !r.employeeGroupId ||
+              r.employeeGroupId === (input.employeeGroupId ?? null),
+          )
           .map((r) => ({
             id: r.id,
             name: r.name,
@@ -232,6 +260,7 @@ export class RulesService {
           layer: input.layer,
           collectiveAgreementId: input.collectiveAgreementId ?? null,
           employeeId: input.employeeId ?? null,
+          employeeGroupId: input.employeeGroupId ?? null,
           validFrom: input.validFrom,
           validTo: input.validTo ?? null,
           params: input.params,
@@ -258,6 +287,78 @@ export class RulesService {
     // B-10: Ein rueckwirkend wirksamer Regelsatz loest die Neubewertung der
     // betroffenen Tage aus (Lauf wird protokolliert; Differenzen: F-04).
     await this.reprocessing.runForRuleSet(row);
+    return row;
+  }
+
+  /** Mitarbeitergruppe anlegen (B-11; auditiert, G-01). */
+  async createGroup(input: CreateEmployeeGroup): Promise<EmployeeGroupRow> {
+    const ctx = this.tenantContext.require();
+    const row = await this.tx(async (tx, tenantId) => {
+      const inserted = await tx
+        .insert(employeeGroups)
+        .values({ tenantId, name: input.name })
+        .returning();
+      return inserted[0];
+    });
+    if (!row) throw new Error('Mitarbeitergruppe konnte nicht angelegt werden.');
+    await this.audit.append({
+      tenantId: ctx.tenantId,
+      action: 'employee_group.create',
+      actorId: ctx.userId,
+      subjectType: 'employee_group',
+      subjectId: row.id,
+      payload: { name: row.name },
+    });
+    return row;
+  }
+
+  async listGroups(): Promise<EmployeeGroupRow[]> {
+    return this.tx(async (tx, tenantId) =>
+      tx.select().from(employeeGroups).where(eq(employeeGroups.tenantId, tenantId)),
+    );
+  }
+
+  /** Mitgliedschaft mit Gueltigkeit (B-11; auditiert). */
+  async assignGroupMember(input: AssignEmployeeGroup): Promise<EmployeeGroupMemberRow> {
+    const ctx = this.tenantContext.require();
+    const row = await this.tx(async (tx, tenantId) => {
+      const grp = await tx
+        .select({ id: employeeGroups.id, active: employeeGroups.active })
+        .from(employeeGroups)
+        .where(and(eq(employeeGroups.tenantId, tenantId), eq(employeeGroups.id, input.groupId)));
+      if (!grp[0] || !grp[0].active) {
+        throw new NotFoundException('Mitarbeitergruppe nicht gefunden oder inaktiv.');
+      }
+      const emp = await tx
+        .select({ id: employees.id })
+        .from(employees)
+        .where(and(eq(employees.tenantId, tenantId), eq(employees.id, input.employeeId)));
+      if (!emp[0]) throw new NotFoundException('Mitarbeitender nicht gefunden.');
+      const inserted = await tx
+        .insert(employeeGroupMembers)
+        .values({
+          tenantId,
+          groupId: input.groupId,
+          employeeId: input.employeeId,
+          validFrom: input.validFrom,
+          validTo: input.validTo ?? null,
+        })
+        .returning();
+      return inserted[0];
+    });
+    if (!row) throw new Error('Mitgliedschaft konnte nicht gespeichert werden.');
+    await this.audit.append({
+      tenantId: ctx.tenantId,
+      action: 'employee_group.assign',
+      actorId: ctx.userId,
+      subjectType: 'employee',
+      subjectId: input.employeeId,
+      payload: {
+        groupId: input.groupId,
+        validFrom: input.validFrom,
+        validTo: input.validTo ?? '',
+      },
+    });
     return row;
   }
 

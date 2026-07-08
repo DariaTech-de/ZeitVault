@@ -48,6 +48,8 @@ export const ruleParamsSchema = z
     openShiftGraceMinutes: z.number().int().min(0),
     arbzgNightStartMinute: z.number().int().min(0).max(1439),
     arbzgNightEndMinute: z.number().int().min(0).max(1439),
+    maxWeeklyMinutes: z.number().int().min(0),
+    maxWorkingTimeMode: z.enum(['daily', 'weekly']),
     roundingClockIn: z.enum(['none', 'nearest_minute', 'down_minute', 'up_minute']),
     roundingBreakStart: z.enum(['none', 'nearest_minute', 'down_minute', 'up_minute']),
     roundingBreakEnd: z.enum(['none', 'nearest_minute', 'down_minute', 'up_minute']),
@@ -59,6 +61,22 @@ export const ruleParamsSchema = z
   });
 export type RuleParamsInput = z.infer<typeof ruleParamsSchema>;
 
+export const createEmployeeGroupSchema = z.object({ name: z.string().min(1).max(200) });
+export type CreateEmployeeGroup = z.infer<typeof createEmployeeGroupSchema>;
+
+export const assignEmployeeGroupSchema = z
+  .object({
+    groupId: uuidSchema,
+    employeeId: uuidSchema,
+    validFrom: isoDateSchema,
+    validTo: isoDateSchema.optional(),
+  })
+  .refine((v) => v.validTo === undefined || v.validFrom <= v.validTo, {
+    message: 'validFrom muss <= validTo sein',
+    path: ['validTo'],
+  });
+export type AssignEmployeeGroup = z.infer<typeof assignEmployeeGroupSchema>;
+
 export const createRuleSetSchema = z
   .object({
     name: z.string().min(1).max(200),
@@ -67,6 +85,8 @@ export const createRuleSetSchema = z
     collectiveAgreementId: uuidSchema.optional(),
     /** Pflicht fuer die individuelle Ebene. */
     employeeId: uuidSchema.optional(),
+    /** Gruppen-Scope (B-11): Regelsatz gilt nur fuer Mitglieder der Gruppe. */
+    employeeGroupId: uuidSchema.optional(),
     validFrom: isoDateSchema,
     validTo: isoDateSchema.optional(),
     params: ruleParamsSchema,
@@ -83,5 +103,9 @@ export const createRuleSetSchema = z
   .refine((v) => v.layer !== 'individual' || v.employeeId !== undefined, {
     message: 'Individuelle Regelsaetze erfordern employeeId.',
     path: ['employeeId'],
+  })
+  .refine((v) => v.layer !== 'individual' || v.employeeGroupId === undefined, {
+    message: 'Individuelle Regelsaetze sind personenbezogen (kein Gruppen-Scope).',
+    path: ['employeeGroupId'],
   });
 export type CreateRuleSet = z.infer<typeof createRuleSetSchema>;

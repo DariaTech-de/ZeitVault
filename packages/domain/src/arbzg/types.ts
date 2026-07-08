@@ -56,6 +56,17 @@ export interface ArbZgRuleParams {
   /** ArbZG-Nachtzeit, Ende (exklusiv; 06:00 = 360; Baecker 05:00). */
   arbzgNightEndMinute: number;
   /**
+   * Woechentliche Hoechstarbeitszeit (B-11; 48 h = 2880 min). Wird immer
+   * berechnet; Befunde erzeugt sie nur im Modus 'weekly'.
+   */
+  maxWeeklyMinutes: number;
+  /**
+   * Massstab der Hoechstarbeitszeit (B-11, Rechtsstand-Abschnitt): 'daily'
+   * (heutiges ArbZG) oder 'weekly' (nur tarifgebunden, per gruppen-gescoptem
+   * Regelsatz umschaltbar).
+   */
+  maxWorkingTimeMode: 'daily' | 'weekly';
+  /**
    * Rundung der Stempelzeit je Ereignisart (B-12): setzt am EREIGNIS beim
    * Eintragen an, nie je Intervall/Zeitscheibe. Standard IMMER 'none';
    * jede Abweichung ist mitbestimmungspflichtig (BV-Referenz, § 87 Abs. 1
@@ -98,6 +109,7 @@ export type FindingCode =
   | 'BREAK_MISSING'
   | 'BREAK_TOO_SHORT'
   | 'CONTINUOUS_WORK_EXCEEDED'
+  | 'MAX_WEEKLY_WORKTIME_EXCEEDED'
   | 'SHIFT_UNRESOLVED';
 
 /** Ein Bewertungsbefund (Warnung oder Verstoss). */

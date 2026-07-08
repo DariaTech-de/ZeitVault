@@ -265,9 +265,12 @@ export class ExportService {
     const materializeAt = nowTs.getTime() < rangeEnd.getTime() ? nowTs : rangeEnd;
     const workedByEmployee = new Map<string, number>();
     const activeRuleSets = await this.rules.loadActiveRuleSets();
+    const memberships = await this.rules.loadGroupMemberships();
     for (const [employeeId, events] of byEmployee) {
       const tz = (await this.workLocations.resolve(employeeId, from)).timeZone;
-      const packageFor = this.rules.buildResolver(this.rules.sourcesFor(activeRuleSets, employeeId));
+      const packageFor = this.rules.buildResolver(
+        this.rules.sourcesFor(activeRuleSets, employeeId, memberships),
+      );
       const days = buildAccountingDays(events, tz, packageFor, materializeAt).filter(
         (d) => d.date >= from && d.date <= to,
       );

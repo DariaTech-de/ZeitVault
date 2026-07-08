@@ -211,6 +211,36 @@ export const collectiveAgreements = pgTable(
 );
 export type CollectiveAgreementRow = typeof collectiveAgreements.$inferSelect;
 
+// Mitarbeitergruppen (B-11): Regelsaetze koennen je Gruppe gelten
+// ("pro Mitarbeitergruppe umschaltbar").
+export const employeeGroups = pgTable(
+  'employee_groups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    name: varchar('name', { length: 200 }).notNull(),
+    active: boolean('active').notNull().default(true),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('employee_groups_tenant_idx').on(t.tenantId)],
+);
+export type EmployeeGroupRow = typeof employeeGroups.$inferSelect;
+
+export const employeeGroupMembers = pgTable(
+  'employee_group_members',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    groupId: uuid('group_id').notNull(),
+    employeeId: uuid('employee_id').notNull(),
+    validFrom: date('valid_from').notNull(),
+    validTo: date('valid_to'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('employee_group_members_tenant_idx').on(t.tenantId, t.employeeId, t.validFrom)],
+);
+export type EmployeeGroupMemberRow = typeof employeeGroupMembers.$inferSelect;
+
 export const ruleSets = pgTable(
   'rule_sets',
   {
@@ -222,6 +252,8 @@ export const ruleSets = pgTable(
       .$type<'collective_agreement' | 'works_agreement' | 'individual'>(),
     collectiveAgreementId: uuid('collective_agreement_id'),
     employeeId: uuid('employee_id'),
+    /** Gruppen-Scope (B-11): Regelsatz gilt nur fuer Mitglieder der Gruppe. */
+    employeeGroupId: uuid('employee_group_id'),
     validFrom: date('valid_from').notNull(),
     validTo: date('valid_to'),
     params: jsonb('params').notNull().$type<Record<string, number | string>>(),

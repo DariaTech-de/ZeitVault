@@ -43,6 +43,8 @@ export const auditActionSchema = z.enum([
   'rule_set.create',
   'rule_set.deactivate',
   'rules.reprocessing_run',
+  'employee_group.create',
+  'employee_group.assign',
 ]);
 export type AuditAction = z.infer<typeof auditActionSchema>;
 

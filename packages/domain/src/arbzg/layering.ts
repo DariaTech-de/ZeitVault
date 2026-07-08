@@ -88,6 +88,9 @@ export const PARAM_FAVORABILITY: Readonly<Record<keyof ArbZgRuleParams, Favorabi
   // Branchenfenster (Baecker 22-5): tarifgebunden, keine Schutzrichtung.
   arbzgNightStartMinute: 'neutral',
   arbzgNightEndMinute: 'neutral',
+  maxWeeklyMinutes: 'lower',
+  // Umstellung auf Wochenmassstab nur tarifgebunden (Rechtsstand, B-11).
+  maxWorkingTimeMode: 'neutral',
   // B-12: Rundungsmodi sind BV-gebunden; asymmetrische Regeln sind abbildbar,
   // aber nie Default und nie individuell.
   roundingClockIn: 'neutral',

@@ -6,6 +6,7 @@ import {
   type StampEvent,
   buildAccountingDays,
   computeBalances,
+  evaluateWeeklyWorkTime,
 } from '@zeitvault/domain';
 import { TenantContextService } from '../common/tenant-context.service';
 import {
@@ -148,13 +149,16 @@ export class ReportingService {
 
     const entries: ViolationEntry[] = [];
     const activeRuleSets = await this.rules.loadActiveRuleSets();
+    const memberships = await this.rules.loadGroupMemberships();
     for (const [employeeId, empRows] of byEmployee) {
       const displayName = names.get(employeeId);
       // Nur reale Mitarbeitende: Stempel ohne zugehoerigen Mitarbeiterdatensatz
       // (z. B. Import-/Testartefakte) gehoeren nicht in den Verstoszreport und
       // wuerden sonst als rohe UUID erscheinen.
       if (!displayName) continue;
-      const packageFor = this.rules.buildResolver(this.rules.sourcesFor(activeRuleSets, employeeId));
+      const packageFor = this.rules.buildResolver(
+        this.rules.sourcesFor(activeRuleSets, employeeId, memberships),
+      );
       for (const day of await this.aggregateDays(employeeId, empRows, from, to, packageFor)) {
         if (day.findings.length > 0) {
           entries.push({ employeeId, displayName, date: day.date, findings: day.findings });
@@ -224,7 +228,7 @@ export class ReportingService {
     const now = new Date();
     const materializeAt = now.getTime() < rangeEnd.getTime() ? now : rangeEnd;
 
-    return buildAccountingDays(
+    const days = buildAccountingDays(
       rows.map(toStampEvent),
       resolved.timeZone,
       packageFor,
@@ -237,5 +241,11 @@ export class ReportingService {
         breakMinutes: day.breakMinutes,
         findings: day.findings,
       }));
+    // B-11: Wochenmaxima (nur im 'weekly'-Modus meldend); Befund haengt am
+    // letzten geladenen Tag der Kalenderwoche.
+    for (const weekly of evaluateWeeklyWorkTime(days, packageFor)) {
+      days.find((d) => d.date === weekly.date)?.findings.push(weekly.finding);
+    }
+    return days;
   }
 }

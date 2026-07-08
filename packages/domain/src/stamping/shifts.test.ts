@@ -6,6 +6,7 @@ import {
   shiftAccountingDay,
   shiftResolution,
   shiftState,
+  trimLeadingWindowCut,
 } from './shifts';
 import type { StampEvent } from './types';
 
@@ -74,6 +75,25 @@ describe('foldShifts', () => {
   it('verwaiste Uebergaenge werfen weiterhin (clock_out/Pause ohne Einstempeln)', () => {
     expect(() => foldShifts([ev('clock_out', '2026-07-06T14:00:00Z')])).toThrow();
     expect(() => foldShifts([ev('break_start', '2026-07-06T14:00:00Z')])).toThrow();
+  });
+
+  it('Fenster-Beschnitt: fuehrende Ereignisse einer angeschnittenen Schicht werden verworfen', () => {
+    // Ein Zeitfenster beginnt mitten in einer Schicht: break_start/break_end/
+    // clock_out gehoeren zu einer Schicht mit Beginn VOR dem Fenster.
+    const windowed = [
+      ev('break_start', '2026-07-06T10:00:00Z'),
+      ev('break_end', '2026-07-06T10:30:00Z'),
+      ev('clock_out', '2026-07-06T15:45:00Z'),
+      ev('clock_in', '2026-07-07T04:00:00Z'),
+      ev('clock_out', '2026-07-07T12:00:00Z'),
+    ];
+    const trimmed = trimLeadingWindowCut(windowed);
+    expect(trimmed[0]?.kind).toBe('clock_in');
+    const shifts = foldShifts(trimmed);
+    expect(shifts).toHaveLength(1);
+    expect(shifts[0]?.startAt.toISOString()).toBe('2026-07-07T04:00:00.000Z');
+    // Ohne Beschnitt bleibt der verwaiste Uebergang ein Fehler (vollstaendige Daten).
+    expect(() => foldShifts(windowed)).toThrow();
   });
 
   // ADR-0019: clock_in ist IMMER erfolgreich. Trifft es auf eine offene

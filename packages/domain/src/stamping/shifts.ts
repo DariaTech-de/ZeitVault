@@ -136,6 +136,24 @@ export function foldShifts(events: readonly StampEvent[]): Shift[] {
   return shifts;
 }
 
+/**
+ * Toleriert FENSTER-BESCHNITT: Beginnt ein zeitlich gefenstertes Ereignis-Set
+ * mitten in einer Schicht (fuehrende break_/clock_out-Ereignisse ohne
+ * clock_in), gehoeren diese zu einer Schicht, deren Beginn VOR dem Fenster
+ * liegt - sie werden fuer Faltung/Validierung verworfen statt als verwaiste
+ * Uebergaenge zu werfen. NUR fuer gefensterte Sichten verwenden; auf
+ * vollstaendigen Daten bleibt ein verwaister Uebergang ein Fehler.
+ */
+export function trimLeadingWindowCut(events: readonly StampEvent[]): StampEvent[] {
+  const effective = [...resolveEffectiveEvents(events)].sort(
+    (a, b) => a.at.getTime() - b.at.getTime(),
+  );
+  const firstIn = effective.findIndex((e) => e.kind === 'clock_in');
+  if (firstIn === 0) return effective;
+  if (firstIn < 0) return [];
+  return effective.slice(firstIn);
+}
+
 /** Zeitpunkt des letzten bekannten Ereignisses einer Schicht. */
 export function shiftLastEventAt(shift: Shift): Date {
   return shift.events.at(-1)?.at ?? shift.startAt;

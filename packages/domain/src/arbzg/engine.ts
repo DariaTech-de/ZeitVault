@@ -250,7 +250,12 @@ export function evaluateWorkDay(input: WorkDayInput, rulePackage: RulePackage): 
   const workedMinutes = totalMinutes(input.intervals);
 
   const findings: Finding[] = [];
-  findings.push(...evaluateDailyWorkTime(workedMinutes, params));
+  // B-11: Im Wochenmassstab ('weekly', nur tarifgebunden) duerfen einzelne
+  // Tage laenger sein - Tagesmaxima entfallen, die Wochengrenze prueft
+  // evaluateWeeklyWorkTime. Pausen/Ruhezeiten gelten unveraendert.
+  if (params.maxWorkingTimeMode !== 'weekly') {
+    findings.push(...evaluateDailyWorkTime(workedMinutes, params));
+  }
   findings.push(...evaluateBreaks(workedMinutes, input.breaks, params));
   findings.push(...evaluateContinuousWork(input.intervals, params));
 

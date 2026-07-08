@@ -19,6 +19,7 @@ import {
   localDateOf,
   shiftState,
   stampRoundingConfigFrom,
+  trimLeadingWindowCut,
 } from '@zeitvault/domain';
 import type { StampLocation } from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
@@ -154,7 +155,7 @@ export class StampingService {
     now: Date,
     packageFor: RulePackageResolver,
   ): DayView {
-    const days = buildAccountingDays(events, timeZone, packageFor, now);
+    const days = buildAccountingDays(trimLeadingWindowCut(events), timeZone, packageFor, now);
     const graceMs = packageFor(localDateOf(now, timeZone)).params.openShiftGraceMinutes * 60_000;
     const state = shiftState(
       days.flatMap((d) => d.shifts),
@@ -230,8 +231,10 @@ export class StampingService {
         const from = new Date(occurredAt.getTime() - EVENT_WINDOW_MS);
         const to = new Date(occurredAt.getTime() + EVENT_WINDOW_MS);
         const rows = await loadEmployeeEventWindow(tx, ctx.tenantId, input.employeeId, from, to);
+        // Fenster-Beschnitt tolerieren: fuehrende Ereignisse einer vor dem
+        // Fenster begonnenen Schicht gehoeren nicht zur Validierung.
         const candidate: StampEvent[] = [
-          ...rows.map(toStampEvent),
+          ...trimLeadingWindowCut(rows.map(toStampEvent)),
           { kind: input.kind, at: occurredAt },
         ];
         // Validiert die SCHICHTFOLGE (auch ueber Mitternacht, K-02/K-03).
@@ -346,7 +349,7 @@ export class StampingService {
           to,
         );
         const corrective: StampEvent = { kind: target.kind, at: correctedAt, correctsId: target.id };
-        const candidate = [...existing.map(toStampEvent), corrective];
+        const candidate = [...trimLeadingWindowCut(existing.map(toStampEvent)), corrective];
         // Pruefen, dass die korrigierte SCHICHTFOLGE gueltig bleibt.
         foldShifts(candidate);
         const inserted = await tx
@@ -364,7 +367,7 @@ export class StampingService {
           .returning();
         const insertedRow = inserted[0];
         const events = insertedRow
-          ? [...existing.map(toStampEvent), toStampEvent(insertedRow)]
+          ? [...trimLeadingWindowCut(existing.map(toStampEvent)), toStampEvent(insertedRow)]
           : candidate;
         return {
           row: insertedRow,
@@ -522,7 +525,7 @@ export class StampingService {
         let duplicates = input.items.length - fresh.length;
 
         const candidate: StampEvent[] = [
-          ...existing.map(toStampEvent),
+          ...trimLeadingWindowCut(existing.map(toStampEvent)),
           ...fresh.map((it) => ({ kind: it.kind, at: new Date(it.occurredAt) })),
         ];
         // Wirft StampTransitionError bei ungueltiger Schichtfolge -> 409.
