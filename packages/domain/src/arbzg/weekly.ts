@@ -28,7 +28,7 @@ export interface WeeklyWorkSummary {
   lastDate: string;
   workedMinutes: number;
   limitMinutes: number;
-  mode: 'daily' | 'weekly';
+  mode: 'daily' | 'weekly' | 'daily_and_weekly';
 }
 
 /** Montag der Kalenderwoche eines ISO-Datums (dayOfWeek: 0 = Sonntag). */
@@ -72,7 +72,7 @@ export function evaluateWeeklyWorkTime(
 ): Array<{ date: string; finding: Finding }> {
   const results: Array<{ date: string; finding: Finding }> = [];
   for (const week of summarizeWeeks(days, packageFor)) {
-    if (week.mode !== 'weekly') continue;
+    if (week.mode === 'daily') continue; // 'weekly' und 'daily_and_weekly' melden
     if (week.workedMinutes > week.limitMinutes) {
       results.push({
         date: week.lastDate,

@@ -143,6 +143,7 @@ export class AdminService {
           personnelNumber: input.personnelNumber,
           displayName: input.displayName,
           externalId: input.externalId ?? null,
+          birthDate: input.birthDate ?? null,
           status: 'active',
         })
         .returning();

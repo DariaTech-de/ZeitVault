@@ -89,6 +89,9 @@ export const PARAM_FAVORABILITY: Readonly<Record<keyof ArbZgRuleParams, Favorabi
   arbzgNightStartMinute: 'neutral',
   arbzgNightEndMinute: 'neutral',
   maxWeeklyMinutes: 'lower',
+  // Enger = schuetzender: spaeterer fruehester Beginn, fruehestes Ende.
+  allowedWorkStartMinute: 'higher',
+  allowedWorkEndMinute: 'lower',
   // Umstellung auf Wochenmassstab nur tarifgebunden (Rechtsstand, B-11).
   maxWorkingTimeMode: 'neutral',
   // B-12: Rundungsmodi sind BV-gebunden; asymmetrische Regeln sind abbildbar,

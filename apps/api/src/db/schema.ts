@@ -46,6 +46,8 @@ export const employees = pgTable(
     tenantId: varchar('tenant_id', { length: 64 }).notNull(),
     personnelNumber: varchar('personnel_number', { length: 64 }).notNull(),
     displayName: varchar('display_name', { length: 200 }).notNull(),
+    /** B-07: nur fuer die JArbSchG-Automatik (Zweckbindung, Migration 0022). */
+    birthDate: date('birth_date'),
     // OIDC-Subject (sub) des verknüpften Nutzers; /me löst darüber den
     // Mitarbeiter des angemeldeten Tokens auf.
     externalId: varchar('external_id', { length: 128 }),

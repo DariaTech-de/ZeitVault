@@ -150,6 +150,7 @@ export class ReportingService {
     const entries: ViolationEntry[] = [];
     const activeRuleSets = await this.rules.loadActiveRuleSets();
     const memberships = await this.rules.loadGroupMemberships();
+    const birthDates = await this.rules.loadBirthDates();
     for (const [employeeId, empRows] of byEmployee) {
       const displayName = names.get(employeeId);
       // Nur reale Mitarbeitende: Stempel ohne zugehoerigen Mitarbeiterdatensatz
@@ -158,6 +159,7 @@ export class ReportingService {
       if (!displayName) continue;
       const packageFor = this.rules.buildResolver(
         this.rules.sourcesFor(activeRuleSets, employeeId, memberships),
+        birthDates.get(employeeId) ?? null,
       );
       for (const day of await this.aggregateDays(employeeId, empRows, from, to, packageFor)) {
         if (day.findings.length > 0) {

@@ -2,18 +2,18 @@ import { ConflictException, Inject, Injectable } from '@nestjs/common';
 import { and, eq, sql } from 'drizzle-orm';
 import {
   ARBZG_2026_V1,
-  DEFAULT_RULE_PACKAGES,
   RuleConflictError,
   type RulePackage,
   type RuleSetSource,
   resolveEffectiveParams,
-  selectRulePackage,
+  selectLawPackage,
 } from '@zeitvault/domain';
 import { TenantContextService } from '../common/tenant-context.service';
 import {
   type EmployeeGroupMemberRow,
   type RuleSetRow,
   employeeGroupMembers,
+  employees,
   ruleSets,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
@@ -103,10 +103,30 @@ export class RuleResolutionService {
     return sources;
   }
 
-  /** Baut aus Quellen einen (Datum)->Paket-Resolver (rein, synchron). */
-  buildResolver(sources: readonly RuleSetSource[]): RulePackageResolver {
+  /** Geburtsdaten aller Mitarbeitenden (B-07-Baseline; eine Abfrage). */
+  async loadBirthDates(): Promise<Map<string, string | null>> {
+    const ctx = this.tenantContext.require();
+    const rows = await this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+      return tx
+        .select({ id: employees.id, birthDate: employees.birthDate })
+        .from(employees)
+        .where(eq(employees.tenantId, ctx.tenantId));
+    });
+    return new Map(rows.map((r) => [r.id, r.birthDate]));
+  }
+
+  /**
+   * Baut aus Quellen einen (Datum)->Paket-Resolver (rein, synchron). Die
+   * Gesetzes-Baseline haengt am Geburtsdatum (B-07): unter 18 gilt das
+   * JArbSchG-Paket, ab dem 18. Geburtstag automatisch das ArbZG.
+   */
+  buildResolver(
+    sources: readonly RuleSetSource[],
+    birthDate?: string | null,
+  ): RulePackageResolver {
     return (isoDate: string) => {
-      const law = selectRulePackage(DEFAULT_RULE_PACKAGES, isoDate) ?? ARBZG_2026_V1;
+      const law = selectLawPackage(isoDate, birthDate) ?? ARBZG_2026_V1;
       try {
         const { params } = resolveEffectiveParams(isoDate, law, sources);
         return { ...law, params };
@@ -123,7 +143,8 @@ export class RuleResolutionService {
   async resolverFor(employeeId?: string): Promise<RulePackageResolver> {
     const rows = await this.loadActiveRuleSets();
     const memberships = employeeId ? await this.loadGroupMemberships() : [];
-    return this.buildResolver(this.sourcesFor(rows, employeeId, memberships));
+    const birthDate = employeeId ? ((await this.loadBirthDates()).get(employeeId) ?? null) : null;
+    return this.buildResolver(this.sourcesFor(rows, employeeId, memberships), birthDate);
   }
 
   /** Quellen fuer die Herkunfts-Anzeige (GET /rules/effective). */

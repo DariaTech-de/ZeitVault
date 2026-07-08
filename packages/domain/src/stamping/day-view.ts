@@ -1,4 +1,5 @@
 import { evaluateWorkDay, totalMinutes } from '../arbzg/engine';
+import { evaluateAllowedWorkWindow } from '../arbzg/work-window';
 import type { BreakInterval, Finding, RulePackage, WorkInterval } from '../arbzg/types';
 import {
   type Shift,
@@ -87,6 +88,8 @@ export function buildAccountingDays(
       },
       pkg,
     );
+    // B-07: Beschaeftigungsfenster (JArbSchG-Nachtruhe) - lokale Wanduhrzeit.
+    findings.push(...evaluateAllowedWorkWindow(workIntervals, timeZone, pkg.params));
     // ADR-0019: Der Tag ist nicht abschliessend pruefbar - die Arbeitszeit ist
     // eine Untergrenze ("mindestens bis"), niemals "eingehalten" behaupten.
     for (const shift of unresolvedShifts) {

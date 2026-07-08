@@ -266,10 +266,12 @@ export class ExportService {
     const workedByEmployee = new Map<string, number>();
     const activeRuleSets = await this.rules.loadActiveRuleSets();
     const memberships = await this.rules.loadGroupMemberships();
+    const birthDates = await this.rules.loadBirthDates();
     for (const [employeeId, events] of byEmployee) {
       const tz = (await this.workLocations.resolve(employeeId, from)).timeZone;
       const packageFor = this.rules.buildResolver(
         this.rules.sourcesFor(activeRuleSets, employeeId, memberships),
+        birthDates.get(employeeId) ?? null,
       );
       const days = buildAccountingDays(events, tz, packageFor, materializeAt).filter(
         (d) => d.date >= from && d.date <= to,

@@ -63,9 +63,17 @@ export interface ArbZgRuleParams {
   /**
    * Massstab der Hoechstarbeitszeit (B-11, Rechtsstand-Abschnitt): 'daily'
    * (heutiges ArbZG) oder 'weekly' (nur tarifgebunden, per gruppen-gescoptem
-   * Regelsatz umschaltbar).
+   * Regelsatz umschaltbar). 'daily_and_weekly' gilt NUR fuer Gesetzespakete
+   * mit beiden harten Grenzen (JArbSchG, B-07) und ist nicht konfigurierbar.
    */
-  maxWorkingTimeMode: 'daily' | 'weekly';
+  maxWorkingTimeMode: 'daily' | 'weekly' | 'daily_and_weekly';
+  /**
+   * Zulaessiges Beschaeftigungsfenster (Wanduhr-Minuten, lokal): ausserhalb
+   * liegender Arbeitsanteil ist ein Verstoss. Erwachsene: 0/1440 (keine
+   * Beschraenkung); JArbSchG § 14 (Nachtruhe): 06:00-20:00 (B-07).
+   */
+  allowedWorkStartMinute: number;
+  allowedWorkEndMinute: number;
   /**
    * Rundung der Stempelzeit je Ereignisart (B-12): setzt am EREIGNIS beim
    * Eintragen an, nie je Intervall/Zeitscheibe. Standard IMMER 'none';
@@ -110,6 +118,7 @@ export type FindingCode =
   | 'BREAK_TOO_SHORT'
   | 'CONTINUOUS_WORK_EXCEEDED'
   | 'MAX_WEEKLY_WORKTIME_EXCEEDED'
+  | 'WORK_OUTSIDE_ALLOWED_WINDOW'
   | 'SHIFT_UNRESOLVED';
 
 /** Ein Bewertungsbefund (Warnung oder Verstoss). */

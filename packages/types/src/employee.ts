@@ -9,5 +9,10 @@ export const createEmployeeSchema = z.object({
   displayName: z.string().min(1).max(200),
   /** OIDC-Subject (sub) des verknüpften Nutzers, optional. */
   externalId: z.string().min(1).max(128).optional(),
+  /**
+   * Optionales Geburtsdatum (B-07): Zweckbindung ausschliesslich die
+   * automatische JArbSchG-Umschaltung fuer Beschaeftigte unter 18.
+   */
+  birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 export type CreateEmployee = z.infer<typeof createEmployeeSchema>;
