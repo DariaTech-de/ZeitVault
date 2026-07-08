@@ -21,14 +21,30 @@ export interface ArbZgRuleParams {
   maxDailyMinutesExtended: number;
   /** Mindestruhezeit zwischen zwei Arbeitseinsaetzen (11 h = 660 min). */
   minRestMinutes: number;
-  /** Ab dieser Arbeitsdauer Pause der Stufe 1 erforderlich (6 h = 360 min). */
+  /**
+   * Schwelle Stufe 1 (6 h = 360 min). § 4 Satz 1 ArbZG: Pause erst bei MEHR
+   * ALS dieser Arbeitszeit erforderlich (strikt groesser, B-02).
+   */
   breakThreshold1Minutes: number;
   /** Pflichtpause Stufe 1 (30 min). */
   breakMinutesTier1: number;
-  /** Ab dieser Arbeitsdauer Pause der Stufe 2 erforderlich (9 h = 540 min). */
+  /**
+   * Schwelle Stufe 2 (9 h = 540 min). § 4 Satz 1: 45 min erst bei MEHR ALS
+   * neun Stunden; genau 9:00 h gehoert noch zu "bis zu neun Stunden" (30 min).
+   */
   breakThreshold2Minutes: number;
   /** Pflichtpause Stufe 2 (45 min). */
   breakMinutesTier2: number;
+  /**
+   * § 4 Satz 2 ArbZG: Ruhepausen koennen in Abschnitte von JEWEILS mindestens
+   * dieser Laenge aufgeteilt werden (15 min); kuerzere Abschnitte zaehlen nicht.
+   */
+  breakMinSegmentMinutes: number;
+  /**
+   * § 4 Satz 3 ArbZG: laenger als diese Zeit (6 h = 360 min) darf nicht
+   * HINTEREINANDER ohne Ruhepause gearbeitet werden.
+   */
+  maxContinuousWorkMinutes: number;
 }
 
 /**
@@ -52,7 +68,8 @@ export type FindingCode =
   | 'MAX_DAILY_WORKTIME_EXTENDED_EXCEEDED'
   | 'REST_PERIOD_TOO_SHORT'
   | 'BREAK_MISSING'
-  | 'BREAK_TOO_SHORT';
+  | 'BREAK_TOO_SHORT'
+  | 'CONTINUOUS_WORK_EXCEEDED';
 
 /** Ein Bewertungsbefund (Warnung oder Verstoss). */
 export interface Finding {

@@ -2,7 +2,9 @@ import type { RulePackage } from './types';
 
 /**
  * Standard-ArbZG-Regelpaket (Stand 2026): 8 h regulaer / 10 h mit Ausgleich,
- * 11 h Ruhezeit, Pausen 30 min ab 6 h und 45 min ab 9 h.
+ * 11 h Ruhezeit, Pausen 30 min bei MEHR ALS 6 h und 45 min bei MEHR ALS 9 h
+ * (§ 4 Satz 1, strikte Schwellen), Pausenabschnitte je >= 15 min (Satz 2),
+ * max. 6 h hintereinander ohne Ruhepause (Satz 3).
  *
  * Aenderungen der Rechtslage (z. B. Umstieg auf eine woechentliche
  * Hoechstarbeitszeit) werden als NEUES, datiertes Regelpaket eingepflegt -
@@ -21,6 +23,8 @@ export const ARBZG_2026_V1: RulePackage = {
     breakMinutesTier1: 30,
     breakThreshold2Minutes: 9 * 60,
     breakMinutesTier2: 45,
+    breakMinSegmentMinutes: 15,
+    maxContinuousWorkMinutes: 6 * 60,
   },
 };
 

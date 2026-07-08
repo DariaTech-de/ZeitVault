@@ -21,7 +21,7 @@ Aufwand: S < 1 Tag, M = 1–3 Tage, L > 3 Tage bzw. strukturell.
 | A-07 | teilweise | ArbZG-Prüfung läuft immer beim Stempeln: `stamping.service.ts:144-149`; Arbeitszeitmodelle: `schema.ts` (work_time_models, Sollminuten je Wochentag) | Verstoßerkennung ist modellunabhängig aktiv ✓. Es gibt aber kein `trust_based`-Kennzeichen am Modell und keine Sollzeit-Prüfung, die man dafür abschalten würde — das Zeitmodell ist an nichts gekoppelt. | S |
 | A-08 | implementiert | Flag je Mandant: `apps/api/src/db/schema.ts:137-144` (geofence_settings.enabled); aus → keine Positionsauswertung: `apps/api/src/geofence/geofence.service.ts:138-155`; Test: `apps/api/test/geofence.itest.ts:61-74` | Bei deaktiviertem Flag wird die Position nicht ausgewertet und kein Geodatum persistiert (`location_check='not_required'`, site/distance NULL). | — |
 | B-01 | teilweise | `packages/domain/src/arbzg/engine.ts:34-59` (8 h Warnung, 10 h Verstoß); Params `rule-packages.ts:17-18`; Tests `engine.test.ts:57-61` | Tagesgrenzen vorhanden. Der Kern des AK fehlt: Ausgleich auf 8 h im DURCHSCHNITT über 6 Kalendermonate/24 Wochen (konfigurierbar Monate ODER Wochen) — die Engine kennt keine periodenübergreifende Betrachtung. | L |
-| B-02 | widerspricht | `packages/domain/src/arbzg/engine.ts:27-31` (`>=` statt `>`); zementiert durch `engine.test.ts:47` (6:00 h → 30 min) und `:51` (9:00 h → 45 min) | Grenzsemantik aktiv falsch: AK verlangt 6:00 h → 0 min und 9:00 h → 30 min (§ 4: „mehr als"). Zusätzlich fehlen: Abschnitte ≥ 15 min (3×10 min zählt heute als 30), „nie länger als 6 h ohne Pause" (nur Tagessumme wird geprüft, `engine.ts:62-90`). | M |
+| B-02 | implementiert | Schnitt 0 (2026-07-08): strikte Schwellen `packages/domain/src/arbzg/engine.ts` (`requiredBreakMinutes`, „mehr als"), Abschnitte ≥ 15 min (`countableBreakMinutes`), max. 6 h am Stück (`evaluateContinuousWork`); Tests mit Gesetzeswortlaut + AK-Matrix: `engine.test.ts` (6:00→0, 6:01→30, 9:00→30, 9:01→45; 3×10 min zählt nicht; Netto-Bezugsgröße; Satz-3-Fälle) | Bezugsgröße ist die Arbeitszeit (netto) — Intervalle enthalten nur Arbeit, Pausen getrennt. Die Engine VALIDIERT nur (kein Auto-Pausenabzug); der frühere `>=`-Fehler erzeugte falsche Verstoßmeldungen, keine Unterbezahlung. | — |
 | B-03 | teilweise | 11-h-Prüfung: `engine.ts:93-111`; im Report tagesübergreifend verkettet: `apps/api/src/reporting/reporting.service.ts:197-213`; live NICHT: `stamping.service.ts:148` (nur `{date}`, ohne previousShiftEnd) | Ruhezeitprüfung existiert und ist im Verstoßreport schichtübergreifend. Beim Stempeln (präventiv, B-13) wird sie nicht ausgewertet; 10-h-Verkürzung mit Ausgleich fehlt; Tagesgrenze ist UTC (siehe K-01/K-03). | M |
 | B-04 | fehlt | Gegenstelle: `packages/domain/src/arbzg/types.ts` (Params kennen keine Nachtarbeitnehmer-Dimension) | Kein Nachtarbeitnehmer-Begriff, keine eigene (kürzere) Ausgleichsperiode. Setzt B-01-Periodik voraus. | M |
 | B-05 | fehlt | Gegenstelle: `packages/domain/src/surcharge/rule-packages.ts:24` (einziges Nachtfenster 20–6, steuerlich) | Es existiert nur die EStG-Definition als Zuschlagsfenster. Die ArbZG-Nachtzeit (23–6, Bäcker 22–5) ist nirgends modelliert; die AK-Unterscheidung 20:30 → `tax_night_bonus=true` / `arbzg_night_work=false` ist nicht darstellbar. | S |
@@ -92,7 +92,7 @@ Aufwand: S < 1 Tag, M = 1–3 Tage, L > 3 Tage bzw. strukturell.
 | K-05 | nicht auffindbar | — (einziger ISO-Wochen-Code ist Dashboard-Anzeige: `admin/dashboard.service.ts:43-47`) | Keine bewertungs-/abrechnungsrelevante Wochenlogik vorhanden, daher auch keine Kantenfälle testbar. | M |
 | K-06 | teilweise | Schema-Review: alle Zeitstempel `timestamp(..., { withTimezone: true })` (`schema.ts` durchgängig), keine naiven Timestamps gefunden ✓ | Erste AK-Hälfte erfüllt. Zweite Hälfte („Bewertung gegen die Zeitzone des Einsatzortes") nicht: kein Einsatzort, Bewertung in UTC (siehe K-01). | L |
 
-Status-Zählung (79 Anforderungen, inkl. Nachtrag C-03a/C-04a vom 2026-07-08): implementiert 6 · teilweise 32 · fehlt 34 · widerspricht 4 (B-02, K-01, K-02, K-03) · nicht auffindbar 3 (I-04, J-05, K-05).
+Status-Zählung (79 Anforderungen, inkl. Nachtrag C-03a/C-04a vom 2026-07-08): implementiert 7 (davon B-02 in Schnitt 0) · teilweise 32 · fehlt 34 · widerspricht 3 (K-01, K-02, K-03) · nicht auffindbar 3 (I-04, J-05, K-05).
 
 ---
 
@@ -162,9 +162,8 @@ nicht gibt. Nachträgliches Einziehen ist Schema- und Prozessänderung zugleich.
 ## 2. Umsetzungsplan in Schnitten (mit Abhängigkeiten)
 
 Deckungsgleich mit der vorgegebenen Phase-2-Reihenfolge; keine Abweichung nötig.
-Ein Hinweis: Der B-02-Fix (widerspricht) ist ein kleiner, isolierter Eingriff —
-ich würde ihn trotz „Schnitt 3" vorziehen dürfen wollen, da er bestehende
-falsche Bewertungen produziert (siehe offene Frage 2).
+**Schnitt 0 (B-02) wurde am 2026-07-08 genehmigt und umgesetzt** (strikte
+Schwellen, Satz 2 + 3, Netto-Bezugsgröße) — siehe Tabellenzeile B-02.
 
 **Schnitt 1 — Fundament (K-01, K-06, K-02/K-03-Basis, A-04, G-01; plus B-12-Basis, A-03).**
 Einsatzort-Entität (IANA-Zeitzone, Bundesland; Zuordnung Mitarbeiter↔Einsatzort
@@ -185,9 +184,8 @@ Zeiträume (Grundlage für Durchschnitte) · Reprocessing-Gerüst, das Neubewert
 als Läufe protokolliert (Differenz-ERZEUGUNG kommt erst mit F-04/Schnitt 5).
 Abhängig von: Schnitt 1 (lokaler Tag), Frage 5.
 
-**Schnitt 3 — Regeln (B-01..B-07, B-11..B-13).**
-B-02-Fix (Grenzen >6h/>9h, 15-min-Abschnitte, 6h-ohne-Pause) · B-01/B-04
-Ausgleichsdurchschnitte (konfigurierbar Monate/Wochen; Nachtarbeitnehmer kürzer)
+**Schnitt 3 — Regeln (B-01, B-03..B-07, B-11..B-13; B-02 bereits in Schnitt 0 erledigt).**
+B-01/B-04 Ausgleichsdurchschnitte (konfigurierbar Monate/Wochen; Nachtarbeitnehmer kürzer)
 · B-03 live verdrahten + 10h-Ausnahme · B-05 zweite Nachtzeit-Definition ·
 B-06 Sonntagszählung + Ersatzruhetag-Fristen · B-07 Geburtsdatum + JArbSchG-
 Paket (Frage 8) · B-11 Wochenmax parallel, je Mitarbeitergruppe · B-12

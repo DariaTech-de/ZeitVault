@@ -23,11 +23,34 @@ export function totalMinutes(intervals: readonly (WorkInterval | BreakInterval)[
   return intervals.reduce((sum, iv) => sum + intervalMinutes(iv), 0);
 }
 
-/** Erforderliche Pausenzeit (Minuten) abhaengig von der Arbeitsdauer. */
+/**
+ * Erforderliche Pausenzeit (Minuten) abhaengig von der ARBEITSZEIT (netto).
+ *
+ * § 4 Satz 1 ArbZG: "Die Arbeit ist durch im voraus feststehende Ruhepausen
+ * von mindestens 30 Minuten bei einer Arbeitszeit von MEHR ALS sechs bis zu
+ * neun Stunden und 45 Minuten bei einer Arbeitszeit von MEHR ALS neun Stunden
+ * insgesamt zu unterbrechen." Die Schwellen sind strikt ("mehr als"):
+ * 6:00 h -> 0 min, 6:01 h -> 30 min, 9:00 h -> 30 min, 9:01 h -> 45 min (B-02).
+ */
 export function requiredBreakMinutes(workedMinutes: number, params: ArbZgRuleParams): number {
-  if (workedMinutes >= params.breakThreshold2Minutes) return params.breakMinutesTier2;
-  if (workedMinutes >= params.breakThreshold1Minutes) return params.breakMinutesTier1;
+  if (workedMinutes > params.breakThreshold2Minutes) return params.breakMinutesTier2;
+  if (workedMinutes > params.breakThreshold1Minutes) return params.breakMinutesTier1;
   return 0;
+}
+
+/**
+ * Anrechenbare Pausenminuten nach § 4 Satz 2 ArbZG: Ruhepausen koennen in
+ * Abschnitte von JEWEILS mindestens 15 Minuten aufgeteilt werden; kuerzere
+ * Unterbrechungen sind keine Ruhepausen und zaehlen nicht.
+ */
+export function countableBreakMinutes(
+  breaks: readonly BreakInterval[],
+  params: ArbZgRuleParams,
+): number {
+  return breaks.reduce((sum, iv) => {
+    const minutes = intervalMinutes(iv);
+    return minutes >= params.breakMinSegmentMinutes ? sum + minutes : sum;
+  }, 0);
 }
 
 /** Prueft die taegliche Hoechstarbeitszeit. */
@@ -58,31 +81,91 @@ export function evaluateDailyWorkTime(
   return [];
 }
 
-/** Prueft die Pflichtpausen. */
+/**
+ * Prueft die Pflichtpausen (§ 4 Satz 1 + 2 ArbZG). Bezugsgroesse ist die
+ * Arbeitszeit (netto, ohne Pausen); angerechnet werden nur Pausenabschnitte
+ * von jeweils mindestens 15 Minuten (Satz 2).
+ */
 export function evaluateBreaks(
   workedMinutes: number,
-  breakMinutes: number,
+  breaks: readonly BreakInterval[],
   params: ArbZgRuleParams,
 ): Finding[] {
   const required = requiredBreakMinutes(workedMinutes, params);
   if (required === 0) return [];
-  if (breakMinutes <= 0) {
+  const taken = totalMinutes(breaks);
+  const countable = countableBreakMinutes(breaks, params);
+  if (countable <= 0) {
     return [
       {
         code: 'BREAK_MISSING',
         severity: 'violation',
-        message: `Pflichtpause von ${required} min fehlt.`,
-        details: { workedMinutes, requiredBreakMinutes: required, takenBreakMinutes: 0 },
+        message:
+          taken > 0
+            ? `Pflichtpause von ${required} min fehlt: ${taken} min Unterbrechung, aber kein Abschnitt erreicht ${params.breakMinSegmentMinutes} min (§ 4 Satz 2 ArbZG).`
+            : `Pflichtpause von ${required} min fehlt.`,
+        details: {
+          workedMinutes,
+          requiredBreakMinutes: required,
+          takenBreakMinutes: taken,
+          countableBreakMinutes: 0,
+        },
       },
     ];
   }
-  if (breakMinutes < required) {
+  if (countable < required) {
     return [
       {
         code: 'BREAK_TOO_SHORT',
         severity: 'violation',
-        message: `Pause zu kurz: ${breakMinutes} min statt erforderlicher ${required} min.`,
-        details: { workedMinutes, requiredBreakMinutes: required, takenBreakMinutes: breakMinutes },
+        message: `Pause zu kurz: ${countable} min anrechenbar statt erforderlicher ${required} min.`,
+        details: {
+          workedMinutes,
+          requiredBreakMinutes: required,
+          takenBreakMinutes: taken,
+          countableBreakMinutes: countable,
+        },
+      },
+    ];
+  }
+  return [];
+}
+
+/**
+ * § 4 Satz 3 ArbZG: "Laenger als sechs Stunden hintereinander duerfen
+ * Arbeitnehmer nicht ohne Ruhepause beschaeftigt werden." Ein Arbeitsblock
+ * wird nur durch eine Unterbrechung von mindestens 15 Minuten (Satz 2)
+ * beendet; kuerzere Luecken setzen den Block fort (gezaehlt wird die
+ * Arbeitszeit im Block, nicht die Luecke).
+ */
+export function evaluateContinuousWork(
+  intervals: readonly WorkInterval[],
+  params: ArbZgRuleParams,
+): Finding[] {
+  const sorted = [...intervals].sort((a, b) => a.start.getTime() - b.start.getTime());
+  let stretch = 0;
+  let longest = 0;
+  let previousEnd: Date | null = null;
+  for (const iv of sorted) {
+    const gapMinutes =
+      previousEnd === null ? Infinity : (iv.start.getTime() - previousEnd.getTime()) / MINUTE_MS;
+    if (gapMinutes >= params.breakMinSegmentMinutes) {
+      stretch = 0;
+    }
+    stretch += intervalMinutes(iv);
+    if (stretch > longest) longest = stretch;
+    previousEnd = iv.end;
+  }
+  if (longest > params.maxContinuousWorkMinutes) {
+    return [
+      {
+        code: 'CONTINUOUS_WORK_EXCEEDED',
+        severity: 'violation',
+        message: `Mehr als ${params.maxContinuousWorkMinutes / 60} h hintereinander ohne Ruhepause gearbeitet (§ 4 Satz 3 ArbZG).`,
+        details: {
+          longestStretchMinutes: longest,
+          limitMinutes: params.maxContinuousWorkMinutes,
+        },
       },
     ];
   }
@@ -127,12 +210,14 @@ function earliestStart(intervals: readonly WorkInterval[]): Date | null {
  */
 export function evaluateWorkDay(input: WorkDayInput, rulePackage: RulePackage): Finding[] {
   const params = rulePackage.params;
+  // Bezugsgroesse ist die Arbeitszeit (netto): input.intervals enthalten nur
+  // Arbeit, Pausen liegen getrennt in input.breaks (B-02).
   const workedMinutes = totalMinutes(input.intervals);
-  const breakMinutes = totalMinutes(input.breaks);
 
   const findings: Finding[] = [];
   findings.push(...evaluateDailyWorkTime(workedMinutes, params));
-  findings.push(...evaluateBreaks(workedMinutes, breakMinutes, params));
+  findings.push(...evaluateBreaks(workedMinutes, input.breaks, params));
+  findings.push(...evaluateContinuousWork(input.intervals, params));
 
   const start = earliestStart(input.intervals);
   if (start !== null) {
