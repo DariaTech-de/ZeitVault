@@ -27,6 +27,7 @@ import { TenantContextService } from '../common/tenant-context.service';
 import { type StampEventRow, stampEvents, workLocations } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
 import { GeofenceService } from '../geofence/geofence.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { type RulePackageResolver, RuleResolutionService } from '../rules/rule-resolution.service';
 import { WorkLocationService } from '../work-location/work-location.service';
 import { type Queryable, loadEmployeeEventWindow } from './event-window';
@@ -115,6 +116,7 @@ export class StampingService {
     private readonly geofence: GeofenceService,
     private readonly workLocations: WorkLocationService,
     private readonly rules: RuleResolutionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   /**
@@ -299,6 +301,9 @@ export class StampingService {
       input.workLocationId ?? null,
     );
     const view = this.buildView(result.events, resolved.timeZone, occurredAt, now, packageFor);
+    // B-13: Verstoesse erreichen die Fuehrungskraft PRAEVENTIV beim Erfassen -
+    // nicht erst im Monatsbericht (der Mitarbeitende sieht sie in der Antwort).
+    await this.notifications.notifyViolations(input.employeeId, view.findings);
     return { event: row, status: view.status, findings: view.findings };
   }
 

@@ -259,7 +259,7 @@ export function evaluateWorkDay(input: WorkDayInput, rulePackage: RulePackage): 
   findings.push(...evaluateBreaks(workedMinutes, input.breaks, params));
   findings.push(...evaluateContinuousWork(input.intervals, params));
 
-  const start = earliestStart(input.intervals);
+  const start = input.firstShiftStart ?? earliestStart(input.intervals);
   if (start !== null) {
     findings.push(
       ...evaluateRestPeriod(

@@ -288,6 +288,24 @@ export const reprocessingRuns = pgTable(
 );
 export type ReprocessingRunRow = typeof reprocessingRuns.$inferSelect;
 
+// B-13: Verstosswarnungen fuer die Fuehrungskraft (praeventiv beim Erfassen).
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    audience: varchar('audience', { length: 32 }).notNull().default('manager'),
+    employeeId: uuid('employee_id').notNull(),
+    code: varchar('code', { length: 64 }).notNull(),
+    severity: varchar('severity', { length: 16 }).notNull(),
+    message: text('message').notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    readAt: timestamp('read_at', { withTimezone: true }),
+  },
+  (t) => [index('notifications_tenant_idx').on(t.tenantId, t.createdAt)],
+);
+export type NotificationRow = typeof notifications.$inferSelect;
+
 /** Standard-Einsatzort je Mitarbeitendem mit Gueltigkeitshistorie (ADR-0016). */
 export const employeeWorkLocations = pgTable(
   'employee_work_locations',

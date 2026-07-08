@@ -174,4 +174,11 @@ export interface WorkDayInput {
    * bleibt sicher, Einhaltung ist nicht pruefbar.
    */
   previousShiftEndIsLowerBound?: boolean;
+  /**
+   * Beginn der ersten Schicht des Tages: Anker der Ruhezeitpruefung auch
+   * dann, wenn (noch) keine Intervalle materialisiert sind - z. B. bei einer
+   * unaufgeloesten Folgeschicht (ADR-0019): ihr BEGINN ist bekannt, der
+   * Ruhezeitverstoss davor damit sicher pruefbar.
+   */
+  firstShiftStart?: Date | null;
 }

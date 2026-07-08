@@ -19,6 +19,7 @@ import { RetentionModule } from './retention/retention.module';
 import { StampingModule } from './stamping/stamping.module';
 import { TerminalModule } from './terminal/terminal.module';
 import { TimeModule } from './time/time.module';
+import { NotificationsModule } from './notifications/notifications.module';
 import { RulesModule } from './rules/rules.module';
 import { WorkLocationModule } from './work-location/work-location.module';
 import { WorkTimeModule } from './work-time/work-time.module';
@@ -52,6 +53,7 @@ import { WorkTimeModule } from './work-time/work-time.module';
     TerminalModule,
     WorkLocationModule,
     RulesModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

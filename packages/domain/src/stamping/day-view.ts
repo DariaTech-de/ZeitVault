@@ -85,6 +85,7 @@ export function buildAccountingDays(
         breaks: breakIntervals,
         previousShiftEnd,
         previousShiftEndIsLowerBound: previousEndIsLowerBound,
+        firstShiftStart: dayShifts[0]?.startAt ?? null,
       },
       pkg,
     );

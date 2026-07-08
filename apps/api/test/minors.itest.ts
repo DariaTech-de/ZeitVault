@@ -6,6 +6,7 @@ import { TenantContextService } from '../src/common/tenant-context.service';
 import * as schema from '../src/db/schema';
 import type { Database } from '../src/db/tokens';
 import { GeofenceService } from '../src/geofence/geofence.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { ReportingService } from '../src/reporting/reporting.service';
 import { RuleResolutionService } from '../src/rules/rule-resolution.service';
 import { StampingService } from '../src/stamping/stamping.service';
@@ -33,7 +34,8 @@ beforeAll(async () => {
   const geofence = new GeofenceService(db, tenantContext, auditStub);
   const workLocations = new WorkLocationService(db, tenantContext, auditStub);
   const resolution = new RuleResolutionService(db, tenantContext);
-  stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations, resolution);
+  const notificationsSvc = new NotificationsService(db, tenantContext);
+  stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations, resolution, notificationsSvc);
   reporting = new ReportingService(db, tenantContext, workLocations, resolution);
 
   await asTenant(() =>

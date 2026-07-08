@@ -7,6 +7,7 @@ import { TenantContextService } from '../src/common/tenant-context.service';
 import * as schema from '../src/db/schema';
 import type { Database } from '../src/db/tokens';
 import { GeofenceService } from '../src/geofence/geofence.service';
+import { NotificationsService } from '../src/notifications/notifications.service';
 import { ReportingService } from '../src/reporting/reporting.service';
 import { ReprocessingService } from '../src/rules/reprocessing.service';
 import { RuleResolutionService } from '../src/rules/rule-resolution.service';
@@ -46,7 +47,8 @@ beforeAll(async () => {
   resolution = new RuleResolutionService(db, tenantContext);
   const reprocessing = new ReprocessingService(db, tenantContext, auditStub, resolution, workLocations);
   rules = new RulesService(db, tenantContext, auditStub, reprocessing);
-  stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations, resolution);
+  const notificationsSvc = new NotificationsService(db, tenantContext);
+  stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations, resolution, notificationsSvc);
   reporting = new ReportingService(db, tenantContext, workLocations, resolution);
 
   await asTenant(() =>
