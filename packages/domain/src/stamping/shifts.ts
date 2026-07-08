@@ -42,9 +42,11 @@ export type ShiftResolution = 'open' | 'unresolved' | 'closed' | 'closed_by_corr
  * juenger ist, gilt sie als 'open' (laeuft); danach als 'unresolved'.
  * 16 h decken die laengste plausible Schicht (Bereitschaft nach Paragraf 7
  * Abs. 2a ArbZG stempelt zwischendurch) ohne Fehlklassifikation ab.
- * TODO(B-08): Der Parameter gehoert in die Regelschicht aus Schnitt 2,
- * gebunden an ein collective_agreement-Objekt (Paragraf 87 Abs. 1 Nr. 2
- * BetrVG) - bis dahin bewusst NUR diese Konstante.
+ *
+ * System-GRUNDWERT (identisch zu ARBZG_2026_V1.params.openShiftGraceMinutes):
+ * Der wirksame Wert kommt aus der Regelschicht (B-08/B-09,
+ * `resolveEffectiveParams`) - Abweichungen sind mitbestimmungspflichtig und
+ * erfordern eine TV-/BV-Referenz; die Helfer nehmen ihn als `graceMs` an.
  */
 export const OPEN_SHIFT_GRACE_MS = 16 * 60 * 60 * 1000;
 
@@ -163,10 +165,14 @@ export function shiftResolution(
 }
 
 /** Aktueller Anwesenheitsstatus aus der Schichtliste (Kulanzfrist beachtet). */
-export function shiftState(shifts: readonly Shift[], now: Date): StampState {
+export function shiftState(
+  shifts: readonly Shift[],
+  now: Date,
+  graceMs: number = OPEN_SHIFT_GRACE_MS,
+): StampState {
   const last = shifts.at(-1);
   if (!last || last.endAt !== null) return 'out';
-  if (shiftResolution(last, now) !== 'open') return 'out';
+  if (shiftResolution(last, now, graceMs) !== 'open') return 'out';
   return last.open?.kind === 'break' ? 'break' : 'in';
 }
 
@@ -180,10 +186,11 @@ export function shiftState(shifts: readonly Shift[], now: Date): StampState {
 export function materializeShift(
   shift: Shift,
   now: Date,
+  graceMs: number = OPEN_SHIFT_GRACE_MS,
 ): { workIntervals: WorkInterval[]; breakIntervals: BreakInterval[] } {
   const workIntervals = [...shift.workIntervals];
   const breakIntervals = [...shift.breakIntervals];
-  if (shift.endAt === null && shift.open && shiftResolution(shift, now) === 'open') {
+  if (shift.endAt === null && shift.open && shiftResolution(shift, now, graceMs) === 'open') {
     const end = now.getTime() < shift.open.since.getTime() ? shift.open.since : now;
     if (shift.open.kind === 'work') {
       workIntervals.push({ start: shift.open.since, end });

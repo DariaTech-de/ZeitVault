@@ -45,6 +45,13 @@ export interface ArbZgRuleParams {
    * HINTEREINANDER ohne Ruhepause gearbeitet werden.
    */
   maxContinuousWorkMinutes: number;
+  /**
+   * Kulanzfrist (ADR-0019): Solange das letzte Ereignis einer nicht beendeten
+   * Schicht juenger ist, gilt sie als 'open'; danach als 'unresolved'.
+   * Regelschicht-Parameter (B-08): Abweichungen sind mitbestimmungspflichtig
+   * (Paragraf 87 Abs. 1 Nr. 2 BetrVG) und erfordern eine TV-/BV-Referenz.
+   */
+  openShiftGraceMinutes: number;
 }
 
 /**

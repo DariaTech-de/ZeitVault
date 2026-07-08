@@ -37,13 +37,19 @@ export interface AccountingDay {
  * das Regelpaket. Laufende Schichten werden zu `now` materialisiert;
  * unaufgeloeste Schichten (ADR-0019) NICHT - sie erhalten den Befund
  * SHIFT_UNRESOLVED und zaehlen nur mit ihrer Untergrenze.
+ *
+ * `rulePackage` kann eine Funktion je Abrechnungstag sein (B-09/B-10): dann
+ * wird jeder Tag gegen das an DIESEM Datum wirksame Paket bewertet (inkl.
+ * Kulanzfrist `openShiftGraceMinutes`) - Grundlage fuer datumsabhaengige
+ * Regelsaetze und rueckwirkende Neubewertung.
  */
 export function buildAccountingDays(
   events: readonly StampEvent[],
   timeZone: string,
-  rulePackage: RulePackage,
+  rulePackage: RulePackage | ((isoDate: string) => RulePackage),
   now: Date,
 ): AccountingDay[] {
+  const packageFor = typeof rulePackage === 'function' ? rulePackage : () => rulePackage;
   const shifts = foldShifts(events);
   const byDay = new Map<string, Shift[]>();
   for (const shift of shifts) {
@@ -57,15 +63,17 @@ export function buildAccountingDays(
   let previousShiftEnd: Date | null = null;
   let previousEndIsLowerBound = false;
   for (const date of [...byDay.keys()].sort()) {
+    const pkg = packageFor(date);
+    const graceMs = pkg.params.openShiftGraceMinutes * 60_000;
     const dayShifts = byDay.get(date) ?? [];
     const workIntervals: WorkInterval[] = [];
     const breakIntervals: BreakInterval[] = [];
     const unresolvedShifts: Shift[] = [];
     for (const shift of dayShifts) {
-      const m = materializeShift(shift, now);
+      const m = materializeShift(shift, now, graceMs);
       workIntervals.push(...m.workIntervals);
       breakIntervals.push(...m.breakIntervals);
-      if (shiftResolution(shift, now) === 'unresolved') {
+      if (shiftResolution(shift, now, graceMs) === 'unresolved') {
         unresolvedShifts.push(shift);
       }
     }
@@ -77,7 +85,7 @@ export function buildAccountingDays(
         previousShiftEnd,
         previousShiftEndIsLowerBound: previousEndIsLowerBound,
       },
-      rulePackage,
+      pkg,
     );
     // ADR-0019: Der Tag ist nicht abschliessend pruefbar - die Arbeitszeit ist
     // eine Untergrenze ("mindestens bis"), niemals "eingehalten" behaupten.
@@ -110,7 +118,7 @@ export function buildAccountingDays(
       if (last.endAt) {
         previousShiftEnd = last.endAt;
         previousEndIsLowerBound = false;
-      } else if (shiftResolution(last, now) === 'unresolved') {
+      } else if (shiftResolution(last, now, graceMs) === 'unresolved') {
         previousShiftEnd = last.workedAtLeastUntil ?? shiftLastEventAt(last);
         previousEndIsLowerBound = true;
       }

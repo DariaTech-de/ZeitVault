@@ -25,6 +25,8 @@ export const ARBZG_2026_V1: RulePackage = {
     breakMinutesTier2: 45,
     breakMinSegmentMinutes: 15,
     maxContinuousWorkMinutes: 6 * 60,
+    // System-Grundwert der Kulanzfrist (ADR-0019); abweichend nur per TV/BV.
+    openShiftGraceMinutes: 16 * 60,
   },
 };
 
