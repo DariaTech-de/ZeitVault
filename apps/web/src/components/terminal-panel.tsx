@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { MessageStrip } from '@/components/fiori/message-strip';
 import { StatusPill } from '@/components/fiori/status-pill';
 import { Button, Card, Empty, ErrorNote, Field, PageHead, Select, TextInput, Worklist } from '@/components/fiori/ui';
@@ -17,6 +17,7 @@ import {
 } from '@/lib/api';
 import { useAuth } from '@/lib/auth';
 import type { Identity } from '@/lib/identity';
+import { getNdefReader, normalizeUid } from '@/lib/nfc';
 
 export function TerminalPanel() {
   const { identity } = useAuth();
@@ -77,10 +78,13 @@ export function TerminalPanel() {
   );
 
   const onMapNfc = useCallback(async () => {
-    if (!identity || nfcUid.trim().length < 2 || !nfcEmployee) return;
+    // Gleiche Normalisierung wie beim Scan am Terminal (Hex, klein, ohne
+    // Trennzeichen), sonst schlaegt die Aufloesung beim Stempeln fehl.
+    const uid = normalizeUid(nfcUid);
+    if (!identity || uid.length < 2 || !nfcEmployee) return;
     setPending(true);
     try {
-      await mapNfc(identity, { uid: nfcUid.trim(), employeeId: nfcEmployee });
+      await mapNfc(identity, { uid, employeeId: nfcEmployee });
       setNfcUid('');
       setNfcEmployee('');
       await refresh(identity);
@@ -90,6 +94,34 @@ export function TerminalPanel() {
       setPending(false);
     }
   }, [identity, nfcUid, nfcEmployee, refresh]);
+
+  // Web NFC (Android/Chrome): UID direkt vom Chip in das Feld übernehmen.
+  const nfcScanSupported = getNdefReader() !== null;
+  const [scanning, setScanning] = useState(false);
+  const scanCtrl = useRef<AbortController | null>(null);
+  useEffect(() => () => scanCtrl.current?.abort(), []);
+
+  const onScanNfc = useCallback(() => {
+    const Reader = getNdefReader();
+    if (!Reader || scanning) return;
+    const ctrl = new AbortController();
+    scanCtrl.current = ctrl;
+    setScanning(true);
+    const stop = () => {
+      ctrl.abort();
+      setScanning(false);
+    };
+    try {
+      const reader = new Reader();
+      reader.onreading = (ev) => {
+        if (ev.serialNumber) setNfcUid(normalizeUid(ev.serialNumber));
+        stop();
+      };
+      void reader.scan({ signal: ctrl.signal }).catch(() => stop());
+    } catch {
+      stop();
+    }
+  }, [scanning]);
 
   return (
     <>
@@ -135,7 +167,14 @@ export function TerminalPanel() {
               <h2 className="text-base font-semibold">NFC-Chip zuordnen</h2>
               <div className="mt-3 space-y-3">
                 <Field label="NFC-UID">
-                  <TextInput value={nfcUid} maxLength={128} placeholder="z. B. 04A1B2C3D4" onChange={(e) => setNfcUid(e.target.value)} />
+                  <div className="flex gap-2">
+                    <TextInput value={nfcUid} maxLength={128} placeholder="z. B. 04A1B2C3D4" onChange={(e) => setNfcUid(e.target.value)} />
+                    {nfcScanSupported && (
+                      <Button size="sm" disabled={scanning} onClick={onScanNfc}>
+                        {scanning ? 'Chip auflegen …' : 'Scannen'}
+                      </Button>
+                    )}
+                  </div>
                 </Field>
                 <Field label="Mitarbeiter/in">
                   <Select value={nfcEmployee} onChange={(e) => setNfcEmployee(e.target.value)}>

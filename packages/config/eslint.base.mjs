@@ -15,6 +15,8 @@ export default [
       '**/coverage/**',
       '**/*.config.{js,cjs,mjs}',
       '**/next-env.d.ts',
+      // Eigenstaendiges Electron-Paket (CommonJS, kein Workspace-Mitglied).
+      'apps/kiosk/**',
     ],
   },
   js.configs.recommended,

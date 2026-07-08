@@ -1,0 +1,38 @@
+{
+  "name": "zeitvault-kiosk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ZeitVault Terminal - Kiosk-App fuer Windows/Linux mit lokalem NFC-Agent (PC/SC)",
+  "author": "DariaTech",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-builder --win",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "de.dariatech.zeitvault.kiosk",
+    "productName": "ZeitVault Terminal",
+    "files": [
+      "main.js",
+      "preload-kiosk.js",
+      "preload-settings.js",
+      "settings.html"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "nsis": {
+      "oneClick": true,
+      "runAfterFinish": true
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Office"
+    }
+  }
+}

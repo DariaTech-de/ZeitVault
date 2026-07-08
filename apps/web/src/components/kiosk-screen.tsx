@@ -8,6 +8,7 @@ import {
   kioskIdentify,
   kioskStamp,
 } from '@/lib/api';
+import { getNdefReader, normalizeUid } from '@/lib/nfc';
 
 const TOKEN_KEY = 'zeitvault.kiosk.token';
 
@@ -124,31 +125,87 @@ export function KioskScreen() {
 
   const identifier = useCallback((): { nfcUid?: string; personnelNumber?: string } => {
     const v = value.trim();
-    return mode === 'nfc' ? { nfcUid: v } : { personnelNumber: v };
+    return mode === 'nfc' ? { nfcUid: normalizeUid(v) } : { personnelNumber: v };
   }, [mode, value]);
 
-  const identify = useCallback(async () => {
-    if (!token || value.trim().length < 1) return;
-    setBusy(true);
-    setError(null);
-    try {
-      const p = await kioskIdentify(token, identifier());
-      setPerson(p);
-      setPhase('identified');
-      revokePhoto();
-      setPhotoUrl(null);
-      if (p.hasPhoto) {
-        const url = await fetchKioskPhotoUrl(token, p.employeeId);
-        photoRef.current = url;
-        setPhotoUrl(url);
+  const runIdentify = useCallback(
+    async (input: { nfcUid?: string; personnelNumber?: string }) => {
+      if (!token) return;
+      setBusy(true);
+      setError(null);
+      try {
+        const p = await kioskIdentify(token, input);
+        setPerson(p);
+        setPhase('identified');
+        revokePhoto();
+        setPhotoUrl(null);
+        if (p.hasPhoto) {
+          const url = await fetchKioskPhotoUrl(token, p.employeeId);
+          photoRef.current = url;
+          setPhotoUrl(url);
+        }
+      } catch (err) {
+        setError(err instanceof Error ? err.message : 'Nicht erkannt.');
+        setPhase('error');
+      } finally {
+        setBusy(false);
       }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Nicht erkannt.');
-      setPhase('error');
-    } finally {
-      setBusy(false);
-    }
-  }, [token, value, identifier, revokePhoto]);
+    },
+    [token, revokePhoto],
+  );
+
+  const identify = useCallback(async () => {
+    if (value.trim().length < 1) return;
+    await runIdentify(identifier());
+  }, [value, identifier, runIdentify]);
+
+  // Aktuelle Phase für Scan-Listener (ohne Re-Subscribe bei jedem Phasenwechsel).
+  const phaseRef = useRef<Phase>('idle');
+  useEffect(() => {
+    phaseRef.current = phase;
+  }, [phase]);
+
+  /** NFC-Scan (Web NFC oder Kiosk-App-Agent): normalisieren und identifizieren. */
+  const identifyByUid = useCallback(
+    (raw: string) => {
+      const uid = normalizeUid(raw);
+      if (uid.length < 2) return;
+      // Ergebnis-/Fehler-Overlay nicht unterbrechen (Auto-Reset läuft bereits).
+      if (phaseRef.current === 'done' || phaseRef.current === 'error') return;
+      setMode('nfc');
+      setValue(uid);
+      void runIdentify({ nfcUid: uid });
+    },
+    [runIdentify],
+  );
+
+  // Brücke zur Kiosk-App: der lokale Agent (Electron/PC-SC) meldet gelesene
+  // Chips als DOM-Event `zeitvault:nfc` mit { uid } (siehe apps/kiosk).
+  useEffect(() => {
+    const onAgentNfc = (e: Event) => {
+      const uid = (e as CustomEvent<{ uid?: string }>).detail?.uid;
+      if (typeof uid === 'string') identifyByUid(uid);
+    };
+    window.addEventListener('zeitvault:nfc', onAgentNfc);
+    return () => window.removeEventListener('zeitvault:nfc', onAgentNfc);
+  }, [identifyByUid]);
+
+  // Web NFC (Android/Chrome): eingebauten NFC-Leser des Tablets nutzen. Auf
+  // anderen Plattformen still inaktiv; Berechtigungs-/Hardwarefehler ignorieren.
+  useEffect(() => {
+    if (!token) return;
+    const Reader = getNdefReader();
+    if (!Reader) return;
+    const ctrl = new AbortController();
+    const reader = new Reader();
+    reader.onreading = (ev) => {
+      if (ev.serialNumber) identifyByUid(ev.serialNumber);
+    };
+    reader.scan({ signal: ctrl.signal }).catch(() => {
+      /* Web NFC nicht erlaubt/verfügbar - Eingabefeld bleibt nutzbar. */
+    });
+    return () => ctrl.abort();
+  }, [token, identifyByUid]);
 
   const doStamp = useCallback(
     async (kind: string) => {

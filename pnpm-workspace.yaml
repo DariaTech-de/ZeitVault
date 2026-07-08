@@ -1,3 +1,7 @@
 packages:
   - "apps/*"
+  # Kiosk-App (Electron) ist bewusst KEIN Workspace-Paket: eigenstaendige
+  # Installation auf dem Terminal-Geraet; haelt Server-Builds/Lockfile frei von
+  # Electron (siehe apps/kiosk/README.md).
+  - "!apps/kiosk"
   - "packages/*"

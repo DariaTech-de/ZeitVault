@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8" />
+  <title>ZeitVault Terminal – Einrichtung</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; margin: 0; }
+    body {
+      font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+      background: linear-gradient(#0b1220, #0e1729);
+      color: #fff; min-height: 100vh;
+      display: flex; align-items: center; justify-content: center; padding: 24px;
+    }
+    .card {
+      width: 100%; max-width: 440px;
+      background: rgba(255,255,255,.04);
+      border: 1px solid rgba(255,255,255,.1);
+      border-radius: 16px; padding: 28px;
+    }
+    .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; }
+    .logo {
+      width: 40px; height: 40px; border-radius: 12px;
+      background: linear-gradient(135deg, #2dd4bf, #10b981);
+      display: grid; place-items: center; font-weight: 700;
+    }
+    h1 { font-size: 18px; font-weight: 600; }
+    p { font-size: 13px; color: rgba(255,255,255,.55); margin: 10px 0 18px; line-height: 1.5; }
+    label { display: block; font-size: 12px; color: rgba(255,255,255,.6); margin-bottom: 6px; }
+    input {
+      width: 100%; padding: 11px 12px; border-radius: 10px;
+      border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06);
+      color: #fff; font-size: 14px; outline: none;
+    }
+    input:focus { border-color: #2dd4bf; }
+    button {
+      margin-top: 14px; width: 100%; padding: 12px; border: 0; border-radius: 10px;
+      background: #14b8a6; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer;
+    }
+    button:hover { background: #0fa895; }
+    .err { color: #fda4af; font-size: 12.5px; margin-top: 10px; display: none; }
+    .hint { font-size: 11.5px; color: rgba(255,255,255,.4); margin-top: 16px; line-height: 1.5; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <span class="logo">ZV</span>
+      <h1>ZeitVault Terminal einrichten</h1>
+    </div>
+    <p>Adresse des ZeitVault-Servers eintragen. Danach öffnet sich die Kiosk-Ansicht;
+       dort wird einmalig das Geräte-Token aus der Verwaltung hinterlegt.</p>
+    <label for="url">Server-URL</label>
+    <input id="url" type="url" placeholder="https://zeit.example.com" autofocus />
+    <button id="save" type="button">Terminal starten</button>
+    <div class="err" id="err">Bitte eine gültige URL mit http(s):// eingeben.</div>
+    <div class="hint">Wartung: Strg+Umschalt+K öffnet diese Einrichtung erneut,
+       Strg+Umschalt+Q beendet die App.</div>
+  </div>
+  <script>
+    const input = document.getElementById('url');
+    const err = document.getElementById('err');
+    function submit() {
+      const url = input.value.trim();
+      if (!/^https?:\/\/.+/.test(url)) { err.style.display = 'block'; return; }
+      err.style.display = 'none';
+      window.zvKiosk.saveConfig(url);
+    }
+    document.getElementById('save').addEventListener('click', submit);
+    input.addEventListener('keydown', (e) => { if (e.key === 'Enter') submit(); });
+  </script>
+</body>
+</html>

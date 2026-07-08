@@ -140,6 +140,7 @@ pnpm --filter @zeitvault/ledger db:migrate
 - [`docs/BEDIENUNGSHANDBUCH.md`](docs/BEDIENUNGSHANDBUCH.md) - Bedienungshandbuch fuer Administratoren und Vorgesetzte (auch als In-App-Hilfe unter `/hilfe`)
 - [`docs/DEPLOY-PROXMOX.md`](docs/DEPLOY-PROXMOX.md) - Produktions-Deployment mit HTTPS auf Proxmox (LXC) via Docker Compose (Schnellstart: `./install.sh`)
 - [`docs/DEPLOY-WINDOWS.md`](docs/DEPLOY-WINDOWS.md) - Installation auf Windows via Docker Desktop/WSL2 (Schnellstart: `install.ps1`)
+- [`docs/TERMINAL-KIOSK.md`](docs/TERMINAL-KIOSK.md) - Terminals einrichten: Android-Tablet (Web NFC), Windows-Kiosk-App (`apps/kiosk`), Fingerprint-Geräte
 - [`CLAUDE.md`](CLAUDE.md) - Konventionen & Leitplanken fuer die Entwicklung mit Claude Code
 - [`docs/adr/`](docs/adr/) - Architecture Decision Records (Entscheidungen mit Kontext und Begruendung)
 - [`docs/compliance/`](docs/compliance/) - GoBD, DSGVO (VVT/RoPA, AVV, DSFA) und DATEV-Referenz
