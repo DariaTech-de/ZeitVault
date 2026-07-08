@@ -60,7 +60,9 @@ implementiert, wenn ein automatisierter Test das AK abdeckt.
 | C-01 | M | Nachtarbeit 20:00–06:00 Uhr: 25 % steuerfrei. | Minutengenaue Splittung der Zeitscheibe an der 20:00-Grenze. |
 | C-02 | M | Nachtarbeit 00:00–04:00 Uhr: 40 %, aber nur wenn die Arbeit vor 00:00 Uhr aufgenommen wurde. | Test: Schicht 22:00–06:00 → 40 % für 0–4 Uhr. Schicht 01:00–06:00 → nur 25 %. |
 | C-03 | M | Sonntagsarbeit: 50 %. | — |
+| C-03a | M | § 3b Abs. 3 Nr. 2 EStG: Der Sonntagszuschlag gilt auch für die Zeit von 0 bis 4 Uhr des FOLGENDEN Tages, wenn die Arbeit vor 0 Uhr aufgenommen wurde. | Test: Schicht So 22:00 – Mo 06:00 → 50 % bis Mo 04:00 Uhr, danach nicht mehr. Schicht Mo 01:00–06:00 → kein Sonntagszuschlag. |
 | C-04 | M | Gesetzliche Feiertage sowie 31.12. ab 14:00 Uhr: 125 %. | — |
+| C-04a | M | § 3b Abs. 3 Nr. 2 EStG: Der Feiertagszuschlag gilt auch für die Zeit von 0 bis 4 Uhr des FOLGENDEN Tages, wenn die Arbeit vor 0 Uhr aufgenommen wurde. | Test: Schicht Feiertag 22:00 – Folgetag 06:00 → 125 % bis 04:00 Uhr des Folgetags, danach nicht mehr. |
 | C-05 | M | 24.12. ab 14:00 Uhr, 25.12., 26.12., 01.05.: 150 %. | — |
 | C-06 | M | Zwei getrennte Grenzen: steuerfrei bis Grundlohn 50 €/h. Sozialversicherungsfrei nur bis Grundlohn 25 €/h (SvEV). | Test mit Grundlohn 40 €/h: Zuschlag ist steuerfrei, aber beitragspflichtig. Zwei separate Ausgabefelder. |
 | C-07 | M | Zuschlagskonkurrenz korrekt auflösen (z. B. Nachtarbeit am Feiertag). | Explizit dokumentierte Kumulationsregeln, testabgedeckt. |

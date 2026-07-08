@@ -36,7 +36,9 @@ Aufwand: S < 1 Tag, M = 1–3 Tage, L > 3 Tage bzw. strukturell.
 | C-01 | teilweise | Fenster 20:00–06:00, 25 %, minutengenau: `surcharge/rule-packages.ts:19-25`, `compute.ts:53-67`; Tests `surcharge.test.ts:24-35` (Splittung an 20:00-Grenze) | Regel + Splittung korrekt und getestet. ABER: Die Zuschlags-Engine ist nur eine Vorschau (`work-time.service.ts:68-72`, Spans kommen vom Aufrufer) — sie ist nicht an echte Stempel angebunden, und „lokale Zeit" ist ungelöst (K-01). | M |
 | C-02 | fehlt | Gegenstelle: `surcharge/types.ts` (SurchargeRule kennt keine Bedingungen, SurchargeKind geschlossen: night/sunday/holiday) | 40 %-Fenster 0–4 Uhr mit Bedingung „Aufnahme vor 00:00" ist im Regelmodell nicht darstellbar. | M |
 | C-03 | teilweise | 50 % Sonntag: `surcharge/rule-packages.ts:26-31`; Tests `surcharge.test.ts:37-45` | Wie C-01: Regel korrekt, aber nicht an echte Stempel angebunden. | S |
+| C-03a | fehlt | Gegenstelle: `surcharge/types.ts` (SurchargeRule kennt keine Bedingungen/Fortwirkungen) | Fortwirkung des Sonntagszuschlags 0–4 Uhr des Folgetags bei Arbeitsaufnahme vor 0 Uhr (§ 3b Abs. 3 Nr. 2 EStG) ist im Regelmodell nicht darstellbar — gleiche Mechanik wie C-02 (bedingtes Fenster mit Schichtbeginn-Bedingung), gemeinsam umzusetzen. | M |
 | C-04 | teilweise | 125 % Feiertag: `surcharge/rule-packages.ts:32-37`; Test `surcharge.test.ts:47-52` | Feiertag ✓. Es fehlt: 31.12. ab 14:00 Uhr (Teiltagsregel nicht darstellbar). | S |
+| C-04a | fehlt | Gegenstelle: `surcharge/types.ts` (wie C-03a) | Fortwirkung des Feiertagszuschlags 0–4 Uhr des Folgetags bei Arbeitsaufnahme vor 0 Uhr — mit C-02/C-03a als eine Fortwirkungs-Mechanik umzusetzen. | M |
 | C-05 | fehlt | Gegenstelle: `surcharge/types.ts:10` (keine 150 %-Klasse, keine Sondertage) | 24.12. ab 14:00, 25./26.12., 01.05. mit 150 % sind nicht modelliert. | M |
 | C-06 | fehlt | — (kein Geldbetrag im gesamten System; gesucht: €, Cent, Grundlohn, wage, hourly) | Ohne Geldmodell keine 50-€-/25-€-Grenzen, keine getrennten Felder steuerfrei/SV-frei. Grundsatzentscheidung nötig (Blocker 5). | L |
 | C-07 | teilweise | Kumulation dokumentiert + implementiert: `compute.ts:36-41` (Nacht kumuliert; Feiertag > Sonntag), `:86-91`; Tests `surcharge.test.ts:54-70` | Für die heutigen drei Arten gelöst und getestet. Mit C-02/C-05 (40 %/125 %/150 % konkurrierend) muss die Konkurrenzregel neu formuliert und getestet werden. | S |
@@ -90,7 +92,7 @@ Aufwand: S < 1 Tag, M = 1–3 Tage, L > 3 Tage bzw. strukturell.
 | K-05 | nicht auffindbar | — (einziger ISO-Wochen-Code ist Dashboard-Anzeige: `admin/dashboard.service.ts:43-47`) | Keine bewertungs-/abrechnungsrelevante Wochenlogik vorhanden, daher auch keine Kantenfälle testbar. | M |
 | K-06 | teilweise | Schema-Review: alle Zeitstempel `timestamp(..., { withTimezone: true })` (`schema.ts` durchgängig), keine naiven Timestamps gefunden ✓ | Erste AK-Hälfte erfüllt. Zweite Hälfte („Bewertung gegen die Zeitzone des Einsatzortes") nicht: kein Einsatzort, Bewertung in UTC (siehe K-01). | L |
 
-Status-Zählung (77 Anforderungen): implementiert 6 · teilweise 32 · fehlt 32 · widerspricht 4 (B-02, K-01, K-02, K-03) · nicht auffindbar 3 (I-04, J-05, K-05).
+Status-Zählung (79 Anforderungen, inkl. Nachtrag C-03a/C-04a vom 2026-07-08): implementiert 6 · teilweise 32 · fehlt 34 · widerspricht 4 (B-02, K-01, K-02, K-03) · nicht auffindbar 3 (I-04, J-05, K-05).
 
 ---
 
@@ -192,10 +194,12 @@ Paket (Frage 8) · B-11 Wochenmax parallel, je Mitarbeitergruppe · B-12
 Rundungsmodus je Mandant + Audit-Sichtbarkeit · B-13 FK-Benachrichtigung.
 Abhängig von: Schnitt 2 (Regelmodell), Schnitt 1 (Tagesbegriff, Gruppen).
 
-**Schnitt 4 — Zuschläge (C-01..C-11, K-04).**
+**Schnitt 4 — Zuschläge (C-01..C-11 inkl. C-03a/C-04a, K-04).**
 Zeitscheiben-Pipeline aus echten Stempeln (Schnitt 1) in lokaler Zeit →
-Zuschlags-Engine · Regelmodell erweitern: bedingte Fenster (C-02), Sondertage
-mit Teiltagsbeginn (C-04/C-05), Kumulationsmatrix (C-07) · Geldmodell (BL-5)
+Zuschlags-Engine · Regelmodell erweitern: bedingte Fenster/Fortwirkungen
+(C-02, C-03a, C-04a als EINE Mechanik „Fenster 0–4 Uhr Folgetag bei Aufnahme
+vor 0 Uhr"), Sondertage mit Teiltagsbeginn (C-04/C-05), Kumulationsmatrix (C-07)
+· Geldmodell (BL-5)
 + Grundlohngrenzen mit getrennten Feldern steuerfrei/SV-frei (C-06) ·
 Feiertagskalender an Einsatzort binden + Gemeinde-Ausnahmen (C-08) ·
 Bewertungsarten-Katalog (C-09) · Mehrarbeit/Überstunden-Zähler (C-10) ·
@@ -226,6 +230,18 @@ K: I-04.
 ---
 
 ## 3. Offene fachliche Fragen
+
+> **Antworten vom 2026-07-08 (Go-Freigabe) sind eingearbeitet:** B-02-Semantik
+> bestätigt und als Schnitt 0 vorgezogen (inkl. § 4 Satz 2 + 3); Einsatzort →
+> ADR-0016; Ereignisquelle/Projektion → ADR-0017; Abrechnungstag vs. Splittung →
+> ADR-0018; Geld = `numeric`/Decimal (nie `number`), Rundung erst am Ende je
+> Lohnart+Periode (B-12), Sekunden→Minuten ist eine Rundungsregel unter B-12;
+> BL-4 über mandantenbezogene Referenztabellen mit geseedeten gesetzlichen
+> Arten (keine freien Strings); H-01 umfasst auch das Admin-Dashboard;
+> Geburtsdatum für B-07 freigegeben; F-01: offizielle DATEV-Spezifikation wird
+> beschafft — bis dahin kanonische Lohnartensätze + Adapter-Interface bauen,
+> KEIN DATEV-Layout. Spec-Nachtrag C-03a/C-04a aufgenommen (79 Anforderungen).
+> Die ursprünglichen Fragen bleiben unten zur Nachvollziehbarkeit stehen.
 
 1. **F-01 / DATEV:** CLAUDE.md §9 verbietet, DATEV-Feldlayouts zu erfinden; die
    offizielle Schnittstellenbeschreibung (LODAS bzw. Lohn und Gehalt,
