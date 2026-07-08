@@ -11,6 +11,30 @@ Keycloak (OIDC/Passkey), API, Audit-Ledger, Web-Oberfläche und einem
 
 ---
 
+## Schnellstart: ein Befehl
+
+Nach dem Klonen des Repos und installiertem Docker (Abschnitt 2) genügt der
+Installer – er erzeugt sichere Secrets, wählt den Betriebsmodus, generiert den
+Keycloak-Realm und startet den Stack:
+
+```bash
+cd /opt/zeitvault
+./install.sh
+```
+
+Der Installer fragt interaktiv nach dem Modus (**tunnel** = Cloudflare Tunnel,
+empfohlen; **domain** = eigene Domain + Let's Encrypt; **ip** = Nur-LAN-Schnelltest)
+und dem Hostnamen. Nicht-interaktiv, z. B. für Automatisierung:
+
+```bash
+ZV_MODE=tunnel ZV_APP_DOMAIN=zeit.example.com ZV_TUNNEL_TOKEN=... ./install.sh
+```
+
+Die Abschnitte unten beschreiben die manuellen Einzelschritte (falls ohne
+Installer gewünscht) sowie die Ersteinrichtung (Abschnitt 7).
+
+---
+
 ## 0. Voraussetzungen
 
 - **Proxmox VE** mit Internetzugang.
