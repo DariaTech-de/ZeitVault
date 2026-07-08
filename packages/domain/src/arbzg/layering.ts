@@ -85,6 +85,9 @@ export const PARAM_FAVORABILITY: Readonly<Record<keyof ArbZgRuleParams, Favorabi
   breakMinSegmentMinutes: 'higher',
   maxContinuousWorkMinutes: 'lower',
   openShiftGraceMinutes: 'neutral',
+  // Branchenfenster (Baecker 22-5): tarifgebunden, keine Schutzrichtung.
+  arbzgNightStartMinute: 'neutral',
+  arbzgNightEndMinute: 'neutral',
 };
 
 /** Ist `candidate` gegenueber `current` eine Verschlechterung fuer Beschaeftigte? */

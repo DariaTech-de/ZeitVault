@@ -46,6 +46,8 @@ export const ruleParamsSchema = z
     breakMinSegmentMinutes: z.number().int().min(0),
     maxContinuousWorkMinutes: z.number().int().min(0),
     openShiftGraceMinutes: z.number().int().min(0),
+    arbzgNightStartMinute: z.number().int().min(0).max(1439),
+    arbzgNightEndMinute: z.number().int().min(0).max(1439),
   })
   .partial()
   .refine((v) => Object.keys(v).length > 0, {

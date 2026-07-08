@@ -46,6 +46,14 @@ export interface ArbZgRuleParams {
    */
   maxContinuousWorkMinutes: number;
   /**
+   * ArbZG-Nachtzeit § 2 Abs. 3, Beginn (Wanduhr-Minute; 23:00 = 1380).
+   * Baeckereien/Konditoreien: 22:00 - Abweichung nur per TV-/BV-Regelsatz.
+   * NICHT das EStG-Zuschlagsfenster (B-05, night.ts).
+   */
+  arbzgNightStartMinute: number;
+  /** ArbZG-Nachtzeit, Ende (exklusiv; 06:00 = 360; Baecker 05:00). */
+  arbzgNightEndMinute: number;
+  /**
    * Kulanzfrist (ADR-0019): Solange das letzte Ereignis einer nicht beendeten
    * Schicht juenger ist, gilt sie als 'open'; danach als 'unresolved'.
    * Regelschicht-Parameter (B-08): Abweichungen sind mitbestimmungspflichtig
