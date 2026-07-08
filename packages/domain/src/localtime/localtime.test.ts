@@ -1,7 +1,10 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
 import {
+  AmbiguousLocalTimeError,
+  NonexistentLocalTimeError,
   assertValidTimeZone,
+  instantFromLocal,
   localDateOf,
   localDayStart,
   localMinuteOfDay,
@@ -159,5 +162,85 @@ describe('assertValidTimeZone', () => {
   it('akzeptiert gueltige IANA-Zonen und wirft bei ungueltigen', () => {
     expect(() => assertValidTimeZone('Europe/Berlin')).not.toThrow();
     expect(() => assertValidTimeZone('Foo/Bar')).toThrow(/Zeitzone/);
+  });
+});
+
+// DST-Eingabevalidierung (K-01): Wanduhr-Eingaben werden NUR ueber
+// instantFromLocal in Instants uebersetzt. Nicht existente Zeiten sind ein
+// Eingabefehler; doppelte verlangen eine explizite Aufloesung - kein stiller
+// Default.
+describe('instantFromLocal', () => {
+  const tz = 'Europe/Berlin';
+
+  it('uebersetzt eine eindeutige lokale Zeit exakt', () => {
+    expect(instantFromLocal('2026-07-08', '10:00', tz).toISOString()).toBe(
+      '2026-07-08T08:00:00.000Z',
+    );
+    expect(instantFromLocal('2026-01-15', '10:00:30', tz).toISOString()).toBe(
+      '2026-01-15T09:00:30.000Z',
+    );
+  });
+
+  it('Fruehjahrsluecke: 29.03.2026 02:30 existiert nicht -> Fehler', () => {
+    expect(() => instantFromLocal('2026-03-29', '02:30', tz)).toThrow(NonexistentLocalTimeError);
+    // Grenzen der Luecke existieren: 01:59 (CET) und 03:00 (CEST).
+    expect(instantFromLocal('2026-03-29', '01:59', tz).toISOString()).toBe(
+      '2026-03-29T00:59:00.000Z',
+    );
+    expect(instantFromLocal('2026-03-29', '03:00', tz).toISOString()).toBe(
+      '2026-03-29T01:00:00.000Z',
+    );
+  });
+
+  it('Herbst-Doppelstunde: 25.10.2026 02:30 verlangt explizite Aufloesung', () => {
+    expect(() => instantFromLocal('2026-10-25', '02:30', tz)).toThrow(AmbiguousLocalTimeError);
+    expect(instantFromLocal('2026-10-25', '02:30', tz, 'earlier').toISOString()).toBe(
+      '2026-10-25T00:30:00.000Z', // 02:30 CEST (Sommerzeit, +02:00)
+    );
+    expect(instantFromLocal('2026-10-25', '02:30', tz, 'later').toISOString()).toBe(
+      '2026-10-25T01:30:00.000Z', // 02:30 CET (Winterzeit, +01:00)
+    );
+  });
+
+  it('eindeutige Zeiten am Umstellungstag brauchen keine Aufloesung', () => {
+    expect(instantFromLocal('2026-10-25', '03:00', tz).toISOString()).toBe(
+      '2026-10-25T02:00:00.000Z',
+    );
+    // resolution wird bei eindeutigen Zeiten ignoriert.
+    expect(instantFromLocal('2026-10-25', '12:00', tz, 'later').toISOString()).toBe(
+      '2026-10-25T11:00:00.000Z',
+    );
+  });
+
+  it('weist syntaktisch ungueltige Angaben ab', () => {
+    expect(() => instantFromLocal('2026-7-8', '10:00', tz)).toThrow(/Ungueltige/);
+    expect(() => instantFromLocal('2026-07-08', '24:00', tz)).toThrow(/Ungueltige/);
+  });
+
+  it('Property: Roundtrip - jeder ganzminuetige Instant ist aus seiner Wanduhrzeit rekonstruierbar', () => {
+    fc.assert(
+      fc.property(
+        fc.integer({ min: Date.UTC(2025, 0, 1) / 60_000, max: Date.UTC(2027, 0, 1) / 60_000 }),
+        fc.constantFrom('Europe/Berlin', 'America/New_York', 'Asia/Kolkata'),
+        (minuteEpoch, zone) => {
+          const instant = new Date(minuteEpoch * 60_000);
+          const p = localDateOf(instant, zone);
+          const wall = `${String(Math.floor(localMinuteOfDay(instant, zone) / 60)).padStart(2, '0')}:${String(localMinuteOfDay(instant, zone) % 60).padStart(2, '0')}`;
+          // Bei Doppelstunden ist der Instant einer der beiden Kandidaten.
+          let earlier: Date;
+          try {
+            earlier = instantFromLocal(p, wall, zone);
+          } catch (err) {
+            if (!(err instanceof AmbiguousLocalTimeError)) throw err;
+            const a = instantFromLocal(p, wall, zone, 'earlier').getTime();
+            const b = instantFromLocal(p, wall, zone, 'later').getTime();
+            expect([a, b]).toContain(instant.getTime());
+            return;
+          }
+          expect(earlier.getTime()).toBe(instant.getTime());
+        },
+      ),
+      { numRuns: 300 },
+    );
   });
 });

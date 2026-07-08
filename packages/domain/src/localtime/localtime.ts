@@ -107,6 +107,94 @@ export function addIsoDays(isoDate: string, delta: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+/** Lokale Wanduhrzeit existiert nicht (Fruehjahrs-Umstellungsluecke). */
+export class NonexistentLocalTimeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NonexistentLocalTimeError';
+  }
+}
+
+/** Lokale Wanduhrzeit existiert zweimal (Herbst-Umstellung); Aufloesung noetig. */
+export class AmbiguousLocalTimeError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'AmbiguousLocalTimeError';
+  }
+}
+
+export type AmbiguousResolution = 'earlier' | 'later';
+
+/**
+ * Uebersetzt eine lokale Wanduhrzeit (Datum + 'HH:mm'[':ss']) in einen
+ * eindeutigen Instant (K-01). Server-Schnittstellen nehmen ausschliesslich
+ * Instants mit Offset an (isoTimestampSchema); diese Funktion ist die EINZIGE
+ * zulaessige Uebersetzung fuer Wanduhr-Eingaben (Formulare, Antraege):
+ *
+ * - Nicht existente Zeiten (Fruehjahrsluecke, z. B. 29.03.2026 02:30
+ *   Europe/Berlin) werfen NonexistentLocalTimeError - die Eingabe ist falsch
+ *   und muss korrigiert werden, nicht still verschoben.
+ * - Doppelte Zeiten (Herbst, z. B. 25.10.2026 02:30) verlangen eine EXPLIZITE
+ *   Aufloesung ('earlier' = Sommerzeit-Instant, 'later' = Winterzeit-Instant);
+ *   ohne sie wird AmbiguousLocalTimeError geworfen. Kein stiller Default.
+ */
+export function instantFromLocal(
+  isoDate: string,
+  wallTime: string,
+  timeZone: string,
+  resolution?: AmbiguousResolution,
+): Date {
+  const dateMatch = /^(\d{4})-(\d{2})-(\d{2})$/.exec(isoDate);
+  const timeMatch = /^(\d{2}):(\d{2})(?::(\d{2}))?$/.exec(wallTime);
+  if (!dateMatch || !timeMatch) {
+    throw new Error(`Ungueltige lokale Zeitangabe: '${isoDate} ${wallTime}'.`);
+  }
+  const [, y, m, d] = dateMatch;
+  const [, hh, mm, ss] = timeMatch;
+  const hour = Number(hh);
+  const minute = Number(mm);
+  const second = Number(ss ?? '0');
+  if (hour > 23 || minute > 59 || second > 59) {
+    throw new Error(`Ungueltige lokale Zeitangabe: '${isoDate} ${wallTime}'.`);
+  }
+  const guess = Date.UTC(Number(y), Number(m) - 1, Number(d), hour, minute, second);
+
+  // Kandidaten ueber alle in der Umgebung vorkommenden Offsets; ein Kandidat
+  // ist gueltig, wenn seine Wanduhrzeit exakt der Eingabe entspricht.
+  const offsets = new Set([
+    tzOffsetMinutes(new Date(guess - 24 * 60 * MINUTE_MS), timeZone),
+    tzOffsetMinutes(new Date(guess), timeZone),
+    tzOffsetMinutes(new Date(guess + 24 * 60 * MINUTE_MS), timeZone),
+  ]);
+  const matches: number[] = [];
+  for (const offset of offsets) {
+    const candidate = guess - offset * MINUTE_MS;
+    const p = wallParts(new Date(candidate), timeZone);
+    const roundtrip = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute, p.second);
+    if (roundtrip === guess && !matches.includes(candidate)) {
+      matches.push(candidate);
+    }
+  }
+
+  if (matches.length === 0) {
+    throw new NonexistentLocalTimeError(
+      `Die lokale Zeit ${isoDate} ${wallTime} existiert in '${timeZone}' nicht ` +
+        '(Zeitumstellung). Bitte eine existierende Uhrzeit angeben.',
+    );
+  }
+  if (matches.length === 1) {
+    return new Date(matches[0]!);
+  }
+  if (!resolution) {
+    throw new AmbiguousLocalTimeError(
+      `Die lokale Zeit ${isoDate} ${wallTime} existiert in '${timeZone}' zweimal ` +
+        "(Zeitumstellung). Aufloesung 'earlier' oder 'later' ist erforderlich.",
+    );
+  }
+  matches.sort((a, b) => a - b);
+  return new Date(resolution === 'earlier' ? matches[0]! : matches[matches.length - 1]!);
+}
+
 /**
  * UTC-Instant der lokalen Mitternacht eines Kalendertags. Zwei-Pass ueber den
  * Offset plus Verifikation; faellt die Mitternacht in eine (in Europa nicht
