@@ -22,6 +22,7 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-window';
 import { WorkLocationService } from '../work-location/work-location.service';
 import { type GobdRecord, checksum, serializeGobd } from './export.serialize';
 
@@ -208,7 +209,7 @@ export class ExportService {
     const { emps, stamps, absences } = await this.db.transaction(async (tx) => {
       await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
       const empRows = await tx.select().from(employees).where(eq(employees.tenantId, ctx.tenantId));
-      const stampRows = await tx
+      const stampBase = await tx
         .select()
         .from(stampEvents)
         .where(
@@ -219,6 +220,12 @@ export class ExportService {
           ),
         )
         .orderBy(asc(stampEvents.employeeId), asc(stampEvents.occurredAt));
+      // Korrektur-Abschluss: eine Korrektur ausserhalb des Ladefensters darf
+      // ihr Original im Lohnexport nicht wieder wirksam machen (F-01-Basis).
+      const stampRows = await closeOverCorrections(
+        stampBase,
+        stampCorrectorFetcher(tx, ctx.tenantId),
+      );
       const absenceRows = await tx
         .select()
         .from(absenceRequests)

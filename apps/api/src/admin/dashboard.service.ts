@@ -23,6 +23,7 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-window';
 import { FALLBACK_TIME_ZONE, WorkLocationService } from '../work-location/work-location.service';
 
 const WINDOW_DAYS = 14;
@@ -85,7 +86,7 @@ export class DashboardService {
           .from(employees)
           .leftJoin(employeePhotos, eq(employeePhotos.employeeId, employees.id))
           .where(and(eq(employees.tenantId, ctx.tenantId), eq(employees.status, 'active')));
-        const evRows = await tx
+        const evBase = await tx
           .select({
             id: stampEvents.id,
             employeeId: stampEvents.employeeId,
@@ -97,6 +98,12 @@ export class DashboardService {
           .from(stampEvents)
           .where(and(eq(stampEvents.tenantId, ctx.tenantId), gte(stampEvents.occurredAt, windowStart)))
           .orderBy(asc(stampEvents.employeeId), asc(stampEvents.occurredAt));
+        // Korrektur-Abschluss: aeltere Korrekturen vor dem Fenster duerfen
+        // ihre Originale hier nicht wieder wirksam werden lassen.
+        const evRows = await closeOverCorrections(
+          evBase,
+          stampCorrectorFetcher(tx, ctx.tenantId),
+        );
         const absC = await tx
           .select({ c: sql<number>`count(*)::int` })
           .from(absenceRequests)

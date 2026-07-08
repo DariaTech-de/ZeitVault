@@ -1,28 +1,24 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { type SQL, and, asc, eq, gte, lte, sql } from 'drizzle-orm';
+import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { and, asc, eq, sql } from 'drizzle-orm';
 import { type StampEvent, StampTransitionError, foldShifts } from '@zeitvault/domain';
 import type { CreateCorrectionRequest } from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
 import { type StampCorrectionRequestRow, type StampEventRow, stampCorrectionRequests, stampEvents } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { loadEmployeeEventWindow } from '../stamping/event-window';
 
 /** Schicht-Kontextfenster wie im StampingService (ADR-0017, K-02/K-03). */
 const EVENT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
 /** Nacherfassungsgrenze (A-03): aeltere Nachtraege werden als late_entry markiert. */
 const LATE_ENTRY_MS = 24 * 60 * 60 * 1000;
-
-function windowWhere(tenantId: string, employeeId: string, around: Date): SQL {
-  const from = new Date(around.getTime() - EVENT_WINDOW_MS);
-  const to = new Date(around.getTime() + EVENT_WINDOW_MS);
-  return and(
-    eq(stampEvents.tenantId, tenantId),
-    eq(stampEvents.employeeId, employeeId),
-    gte(stampEvents.occurredAt, from),
-    lte(stampEvents.occurredAt, to),
-  ) as SQL;
-}
 
 function toStampEvent(row: StampEventRow): StampEvent {
   return { id: row.id, kind: row.kind, at: row.occurredAt, correctsId: row.correctsEventId };
@@ -92,15 +88,49 @@ export class CorrectionService {
 
         let applied: string | null = null;
         if (action === 'approve') {
-          const existing = await tx
-            .select()
-            .from(stampEvents)
-            .where(windowWhere(ctx.tenantId, req.employeeId, req.proposedOccurredAt))
-            .orderBy(asc(stampEvents.occurredAt));
+          // Bei einer KORREKTUR wird das Ziel-Ereignis per id geladen: seine
+          // Existenz, die Zugehoerigkeit zum Antrags-Mitarbeitenden und sein
+          // Zeitpunkt sind Validierungsgrundlage - nicht das Fenster um den
+          // vorgeschlagenen Zeitpunkt (das Ziel kann > 48 h entfernt liegen).
+          let target: StampEventRow | null = null;
+          if (req.kind === 'correct') {
+            if (!req.targetEventId) {
+              throw new BadRequestException('Korrektur-Antrag ohne targetEventId.');
+            }
+            const targetRows = await tx
+              .select()
+              .from(stampEvents)
+              .where(
+                and(eq(stampEvents.tenantId, ctx.tenantId), eq(stampEvents.id, req.targetEventId)),
+              );
+            target = targetRows[0] ?? null;
+            if (!target) {
+              throw new NotFoundException('Zu korrigierende Stempelung nicht gefunden.');
+            }
+            if (target.employeeId !== req.employeeId) {
+              throw new BadRequestException(
+                'Ziel-Stempelung gehört nicht zum Mitarbeitenden des Antrags.',
+              );
+            }
+          }
+          // Fenster deckt Original UND vorgeschlagenen Zeitpunkt ab (wie
+          // correctStamp); die Umgebung des Originals wird also mitvalidiert,
+          // auch wenn die Korrektur den Stempel weit verschiebt.
+          const anchors = [
+            req.proposedOccurredAt.getTime(),
+            ...(target ? [target.occurredAt.getTime()] : []),
+          ];
+          const existing = await loadEmployeeEventWindow(
+            tx,
+            ctx.tenantId,
+            req.employeeId,
+            new Date(Math.min(...anchors) - EVENT_WINDOW_MS),
+            new Date(Math.max(...anchors) + EVENT_WINDOW_MS),
+          );
           const corrective: StampEvent = {
             kind: req.proposedKind,
             at: req.proposedOccurredAt,
-            correctsId: req.kind === 'correct' ? req.targetEventId ?? undefined : undefined,
+            correctsId: target?.id,
           };
           // Wirft StampTransitionError bei ungueltiger SCHICHTFOLGE -> 409
           // (Schichten duerfen Mitternacht ueberschreiten, K-02/K-03).
@@ -109,10 +139,7 @@ export class CorrectionService {
           // eine Nacherfassung; die Antrags-Begruendung ist der Pflichtgrund.
           const isLate = Date.now() - req.proposedOccurredAt.getTime() > LATE_ENTRY_MS;
           // Einsatzort-Uebersteuerung des Ziel-Stempels vererben (ADR-0016).
-          const targetLocation =
-            req.kind === 'correct' && req.targetEventId
-              ? (existing.find((e) => e.id === req.targetEventId)?.workLocationId ?? null)
-              : null;
+          const targetLocation = target?.workLocationId ?? null;
           const insertedStamp = await tx
             .insert(stampEvents)
             .values({
@@ -121,7 +148,7 @@ export class CorrectionService {
               kind: req.proposedKind,
               occurredAt: req.proposedOccurredAt,
               source: 'web',
-              correctsEventId: req.kind === 'correct' ? req.targetEventId : null,
+              correctsEventId: target?.id ?? null,
               correctionReason: req.reason,
               workLocationId: targetLocation,
               lateEntry: isLate,
@@ -161,7 +188,13 @@ export class CorrectionService {
         actorId: ctx.userId,
         subjectType: 'stamp_event',
         subjectId: appliedEventId,
-        payload: { fromRequest: id, reason: updated.reason },
+        payload: {
+          fromRequest: id,
+          reason: updated.reason,
+          kind: updated.proposedKind,
+          occurredAt: updated.proposedOccurredAt.toISOString(),
+          ...(updated.targetEventId ? { correctsEventId: updated.targetEventId } : {}),
+        },
       });
     } else {
       await this.audit.append({

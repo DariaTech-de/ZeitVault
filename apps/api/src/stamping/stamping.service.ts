@@ -5,7 +5,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { type SQL, and, asc, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import {
   type AccountingDay,
   ARBZG_2026_V1,
@@ -22,10 +22,11 @@ import {
 import type { StampLocation } from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
-import { type StampEventRow, stampEvents } from '../db/schema';
+import { type StampEventRow, stampEvents, workLocations } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
 import { GeofenceService } from '../geofence/geofence.service';
 import { WorkLocationService } from '../work-location/work-location.service';
+import { type Queryable, loadEmployeeEventWindow } from './event-window';
 
 const STAMP_AUDIT_ACTION = {
   clock_in: 'time.clock_in',
@@ -104,13 +105,29 @@ export class StampingService {
     private readonly workLocations: WorkLocationService,
   ) {}
 
-  private windowWhere(tenantId: string, employeeId: string, from: Date, to: Date): SQL {
-    return and(
-      eq(stampEvents.tenantId, tenantId),
-      eq(stampEvents.employeeId, employeeId),
-      gte(stampEvents.occurredAt, from),
-      lte(stampEvents.occurredAt, to),
-    ) as SQL;
+  /**
+   * F5-Schutz: Eine Einsatzort-Uebersteuerung am Stempel wird beim EINTRAGEN
+   * validiert (existiert im Mandanten, ist aktiv) - sonst stuende dauerhaft
+   * eine haengende Referenz in der append-only Tabelle und resolve() fiele
+   * still auf Zuordnung/Default zurueck (falsche Zeitzone/falsches
+   * Feiertagsland, ohne Rueckmeldung). Historische Aufloesung bereits
+   * gespeicherter Stempel prueft `active` bewusst NICHT.
+   */
+  private async assertWorkLocationOverride(
+    q: Queryable,
+    tenantId: string,
+    workLocationId: string,
+  ): Promise<void> {
+    const rows = await q
+      .select({ active: workLocations.active })
+      .from(workLocations)
+      .where(and(eq(workLocations.tenantId, tenantId), eq(workLocations.id, workLocationId)));
+    if (!rows[0]) {
+      throw new BadRequestException('Einsatzort-Übersteuerung: Einsatzort nicht gefunden.');
+    }
+    if (!rows[0].active) {
+      throw new BadRequestException('Einsatzort-Übersteuerung: Einsatzort ist deaktiviert.');
+    }
   }
 
   /**
@@ -158,6 +175,9 @@ export class StampingService {
   }): Promise<StampResult> {
     const ctx = this.tenantContext.require();
     const now = new Date();
+    // TODO(B-12): Hier setzt die konfigurierbare Ereignis-Rundung an
+    // (applyStampRounding je Mandant/Betriebsvereinbarung, Standard 'none') -
+    // gerundet wird am EREIGNIS beim Eintragen, nie je Intervall/Zeitscheibe.
     const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
 
     // A-03: Nacherfassung > 24 h nach der Arbeitsleistung nur mit Begruendung;
@@ -177,13 +197,12 @@ export class StampingService {
     try {
       result = await this.db.transaction(async (tx) => {
         await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+        if (input.workLocationId) {
+          await this.assertWorkLocationOverride(tx, ctx.tenantId, input.workLocationId);
+        }
         const from = new Date(occurredAt.getTime() - EVENT_WINDOW_MS);
         const to = new Date(occurredAt.getTime() + EVENT_WINDOW_MS);
-        const rows = await tx
-          .select()
-          .from(stampEvents)
-          .where(this.windowWhere(ctx.tenantId, input.employeeId, from, to))
-          .orderBy(asc(stampEvents.occurredAt));
+        const rows = await loadEmployeeEventWindow(tx, ctx.tenantId, input.employeeId, from, to);
         const candidate: StampEvent[] = [
           ...rows.map(toStampEvent),
           { kind: input.kind, at: occurredAt },
@@ -225,7 +244,16 @@ export class StampingService {
       actorId: ctx.userId,
       subjectType: 'stamp_event',
       subjectId: row.id,
-      payload: { kind: input.kind, ...(isLate ? { lateEntry: true } : {}) },
+      // A-03/G-01: Nacherfassung und Einsatzort-Uebersteuerung muessen aus dem
+      // manipulationsevidenten Ledger allein erkennbar sein - nicht nur aus
+      // der (per Trigger geschuetzten) Anwendungstabelle.
+      payload: {
+        kind: input.kind,
+        occurredAt: occurredAt.toISOString(),
+        source: input.source,
+        ...(input.workLocationId ? { workLocationId: input.workLocationId } : {}),
+        ...(isLate ? { lateEntry: true, lateReason: input.reason ?? '' } : {}),
+      },
     });
 
     const resolved = await this.workLocations.resolve(
@@ -276,11 +304,13 @@ export class StampingService {
         const to = new Date(
           Math.max(target.occurredAt.getTime(), correctedAt.getTime()) + EVENT_WINDOW_MS,
         );
-        const existing = await tx
-          .select()
-          .from(stampEvents)
-          .where(this.windowWhere(ctx.tenantId, target.employeeId, from, to))
-          .orderBy(asc(stampEvents.occurredAt));
+        const existing = await loadEmployeeEventWindow(
+          tx,
+          ctx.tenantId,
+          target.employeeId,
+          from,
+          to,
+        );
         const corrective: StampEvent = { kind: target.kind, at: correctedAt, correctsId: target.id };
         const candidate = [...existing.map(toStampEvent), corrective];
         // Pruefen, dass die korrigierte SCHICHTFOLGE gueltig bleibt.
@@ -326,7 +356,12 @@ export class StampingService {
       actorId: ctx.userId,
       subjectType: 'stamp_event',
       subjectId: row.id,
-      payload: { correctsEventId: input.eventId, reason: input.correctionReason },
+      payload: {
+        correctsEventId: input.eventId,
+        occurredAt: correctedAt.toISOString(),
+        reason: input.correctionReason,
+        ...(result.workLocationId ? { workLocationId: result.workLocationId } : {}),
+      },
     });
 
     const resolved = await this.workLocations.resolve(
@@ -385,13 +420,13 @@ export class StampingService {
   ): Promise<StampEventRow[]> {
     return this.db.transaction(async (tx) => {
       await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
-      return tx
-        .select()
-        .from(stampEvents)
-        .where(
-          this.windowWhere(tenantId, employeeId, new Date(now.getTime() - EVENT_WINDOW_MS), now),
-        )
-        .orderBy(asc(stampEvents.occurredAt));
+      return loadEmployeeEventWindow(
+        tx,
+        tenantId,
+        employeeId,
+        new Date(now.getTime() - EVENT_WINDOW_MS),
+        now,
+      );
     });
   }
 
@@ -422,7 +457,8 @@ export class StampingService {
     const ctx = this.tenantContext.require();
     if (input.items.length === 0) return { accepted: 0, duplicates: 0 };
     const now = new Date();
-    const acceptedItems: Array<{ kind: StampKind; id: string }> = [];
+    const acceptedItems: Array<{ kind: StampKind; id: string; occurredAt: Date; isLate: boolean }> =
+      [];
     let summary = { accepted: 0, duplicates: 0 };
     const evaluate = await this.geofence.buildEvaluator();
 
@@ -433,11 +469,13 @@ export class StampingService {
     try {
       summary = await this.db.transaction(async (tx) => {
         await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
-        const existing = await tx
-          .select()
-          .from(stampEvents)
-          .where(this.windowWhere(ctx.tenantId, input.employeeId, from, to))
-          .orderBy(asc(stampEvents.occurredAt));
+        const existing = await loadEmployeeEventWindow(
+          tx,
+          ctx.tenantId,
+          input.employeeId,
+          from,
+          to,
+        );
         const knownClientIds = new Set(
           existing.map((r) => r.clientEventId).filter((x): x is string => x !== null),
         );
@@ -476,7 +514,7 @@ export class StampingService {
           const row = inserted[0];
           if (row) {
             accepted += 1;
-            acceptedItems.push({ kind: it.kind, id: row.id });
+            acceptedItems.push({ kind: it.kind, id: row.id, occurredAt, isLate });
           } else {
             duplicates += 1;
           }
@@ -497,7 +535,14 @@ export class StampingService {
         actorId: ctx.userId,
         subjectType: 'stamp_event',
         subjectId: accepted.id,
-        payload: { source: 'mobile', sync: true },
+        // A-03: Offline nacherfasste Stempel muessen auch im Ledger als
+        // Nacherfassung erkennbar sein, nicht nur in der Anwendungstabelle.
+        payload: {
+          source: 'mobile',
+          sync: true,
+          occurredAt: accepted.occurredAt.toISOString(),
+          ...(accepted.isLate ? { lateEntry: true, lateReason: 'offline_sync' } : {}),
+        },
       });
     }
     return summary;

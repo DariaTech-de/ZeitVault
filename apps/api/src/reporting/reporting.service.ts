@@ -17,6 +17,7 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-window';
 import { WorkLocationService } from '../work-location/work-location.service';
 
 function toStampEvent(row: StampEventRow): StampEvent {
@@ -82,7 +83,7 @@ export class ReportingService {
     const ctx = this.tenantContext.require();
     const rows = await this.db.transaction(async (tx) => {
       await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
-      return tx
+      const base = await tx
         .select()
         .from(stampEvents)
         .where(
@@ -93,6 +94,9 @@ export class ReportingService {
           ),
         )
         .orderBy(asc(stampEvents.occurredAt));
+      // Korrektur-Abschluss: eine Korrektur ausserhalb des Fensters darf ihr
+      // Original hier nicht wieder wirksam werden lassen (Doppelzaehlung).
+      return closeOverCorrections(base, stampCorrectorFetcher(tx, ctx.tenantId, employeeId));
     });
 
     const days = await this.aggregateDays(employeeId, rows, from, to);
@@ -111,11 +115,13 @@ export class ReportingService {
     const ctx = this.tenantContext.require();
     const { rows, names } = await this.db.transaction(async (tx) => {
       await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
-      const stamps = await tx
+      const base = await tx
         .select()
         .from(stampEvents)
         .where(and(eq(stampEvents.tenantId, ctx.tenantId), rangeWhere(stampEvents.occurredAt, from, to)))
         .orderBy(asc(stampEvents.occurredAt));
+      // Korrektur-Abschluss (mandantenweit, siehe timesheet()).
+      const stamps = await closeOverCorrections(base, stampCorrectorFetcher(tx, ctx.tenantId));
       const emps = await tx
         .select()
         .from(employees)
