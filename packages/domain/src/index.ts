@@ -6,6 +6,7 @@ export * from './stamping/fold';
 export * from './stamping/shifts';
 export * from './stamping/day-view';
 export * from './stamping/evaluate';
+export * from './stamping/rounding';
 export * from './localtime/localtime';
 export * from './calendar/holidays';
 export * from './calendar/worktime';
