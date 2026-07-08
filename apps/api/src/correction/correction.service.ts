@@ -1,27 +1,26 @@
 import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { type SQL, and, asc, eq, gte, lt, sql } from 'drizzle-orm';
-import {
-  type StampEvent,
-  StampTransitionError,
-  foldStampDay,
-  resolveEffectiveEvents,
-} from '@zeitvault/domain';
+import { type SQL, and, asc, eq, gte, lte, sql } from 'drizzle-orm';
+import { type StampEvent, StampTransitionError, foldShifts } from '@zeitvault/domain';
 import type { CreateCorrectionRequest } from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
 import { TenantContextService } from '../common/tenant-context.service';
 import { type StampCorrectionRequestRow, type StampEventRow, stampCorrectionRequests, stampEvents } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+/** Schicht-Kontextfenster wie im StampingService (ADR-0017, K-02/K-03). */
+const EVENT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
-function dayWhere(tenantId: string, employeeId: string, date: Date): SQL {
-  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const end = new Date(start.getTime() + DAY_MS);
+/** Nacherfassungsgrenze (A-03): aeltere Nachtraege werden als late_entry markiert. */
+const LATE_ENTRY_MS = 24 * 60 * 60 * 1000;
+
+function windowWhere(tenantId: string, employeeId: string, around: Date): SQL {
+  const from = new Date(around.getTime() - EVENT_WINDOW_MS);
+  const to = new Date(around.getTime() + EVENT_WINDOW_MS);
   return and(
     eq(stampEvents.tenantId, tenantId),
     eq(stampEvents.employeeId, employeeId),
-    gte(stampEvents.occurredAt, start),
-    lt(stampEvents.occurredAt, end),
+    gte(stampEvents.occurredAt, from),
+    lte(stampEvents.occurredAt, to),
   ) as SQL;
 }
 
@@ -96,15 +95,24 @@ export class CorrectionService {
           const existing = await tx
             .select()
             .from(stampEvents)
-            .where(dayWhere(ctx.tenantId, req.employeeId, req.proposedOccurredAt))
+            .where(windowWhere(ctx.tenantId, req.employeeId, req.proposedOccurredAt))
             .orderBy(asc(stampEvents.occurredAt));
           const corrective: StampEvent = {
             kind: req.proposedKind,
             at: req.proposedOccurredAt,
             correctsId: req.kind === 'correct' ? req.targetEventId ?? undefined : undefined,
           };
-          // Wirft StampTransitionError bei ungültiger Tagesfolge -> 409.
-          foldStampDay(resolveEffectiveEvents([...existing.map(toStampEvent), corrective]));
+          // Wirft StampTransitionError bei ungueltiger SCHICHTFOLGE -> 409
+          // (Schichten duerfen Mitternacht ueberschreiten, K-02/K-03).
+          foldShifts([...existing.map(toStampEvent), corrective]);
+          // A-03: genehmigter Nachtrag/Korrektur > 24 h nach dem Zeitpunkt ist
+          // eine Nacherfassung; die Antrags-Begruendung ist der Pflichtgrund.
+          const isLate = Date.now() - req.proposedOccurredAt.getTime() > LATE_ENTRY_MS;
+          // Einsatzort-Uebersteuerung des Ziel-Stempels vererben (ADR-0016).
+          const targetLocation =
+            req.kind === 'correct' && req.targetEventId
+              ? (existing.find((e) => e.id === req.targetEventId)?.workLocationId ?? null)
+              : null;
           const insertedStamp = await tx
             .insert(stampEvents)
             .values({
@@ -115,6 +123,9 @@ export class CorrectionService {
               source: 'web',
               correctsEventId: req.kind === 'correct' ? req.targetEventId : null,
               correctionReason: req.reason,
+              workLocationId: targetLocation,
+              lateEntry: isLate,
+              lateReason: isLate ? req.reason : null,
             })
             .returning();
           applied = insertedStamp[0]?.id ?? null;
@@ -137,7 +148,7 @@ export class CorrectionService {
       appliedEventId = result.applied;
     } catch (err) {
       if (err instanceof StampTransitionError) {
-        throw new ConflictException(`Nachtrag ergibt keine gültige Tagesfolge: ${err.message}`);
+        throw new ConflictException(`Nachtrag ergibt keine gültige Schichtfolge: ${err.message}`);
       }
       throw err;
     }

@@ -1,16 +1,23 @@
-import { ConflictException, Inject, Injectable, NotFoundException } from '@nestjs/common';
-import { type SQL, and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 import {
+  BadRequestException,
+  ConflictException,
+  Inject,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { type SQL, and, asc, eq, gte, lte, sql } from 'drizzle-orm';
+import {
+  type AccountingDay,
   ARBZG_2026_V1,
   type Finding,
   type StampEvent,
   type StampKind,
   StampTransitionError,
-  computeStampStatus,
-  evaluateStampDay,
-  foldStampDay,
-  resolveEffectiveEvents,
-  type StampStatus,
+  type StampState,
+  buildAccountingDays,
+  foldShifts,
+  localDateOf,
+  shiftState,
 } from '@zeitvault/domain';
 import type { StampLocation } from '@zeitvault/types';
 import { AuditClient } from '../audit/audit.client';
@@ -18,6 +25,7 @@ import { TenantContextService } from '../common/tenant-context.service';
 import { type StampEventRow, stampEvents } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
 import { GeofenceService } from '../geofence/geofence.service';
+import { WorkLocationService } from '../work-location/work-location.service';
 
 const STAMP_AUDIT_ACTION = {
   clock_in: 'time.clock_in',
@@ -26,25 +34,34 @@ const STAMP_AUDIT_ACTION = {
   clock_out: 'time.clock_out',
 } as const;
 
-const DAY_MS = 24 * 60 * 60 * 1000;
+/**
+ * Kontextfenster um einen Stempelzeitpunkt (ADR-0017, K-02/K-03): Die
+ * Validierung erfolgt gegen die SCHICHTFOLGE, nicht gegen den UTC-Kalendertag.
+ * 48 h vor/nach dem betrachteten Zeitpunkt decken die betroffene Schicht
+ * (auch ueber Mitternacht) samt Nachbarschichten vollstaendig ab.
+ */
+const EVENT_WINDOW_MS = 48 * 60 * 60 * 1000;
 
-function dayWhere(tenantId: string, employeeId: string, date: Date): SQL | undefined {
-  const start = new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()));
-  const endExclusive = new Date(start.getTime() + DAY_MS);
-  return and(
-    eq(stampEvents.tenantId, tenantId),
-    eq(stampEvents.employeeId, employeeId),
-    gte(stampEvents.occurredAt, start),
-    lt(stampEvents.occurredAt, endExclusive),
-  );
-}
+/** Nacherfassungsgrenze (A-03): aeltere Eintraege brauchen eine Begruendung. */
+const LATE_ENTRY_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Datum fuer die Einsatzort-Aufloesung (Zuordnungen sind tagesgranular). Das
+ * UTC-Datum des Instants genuegt hier: Abweichungen zur lokalen Sicht wirken
+ * sich nur aus, wenn ein Zuordnungswechsel exakt auf die Tagesgrenze faellt.
+ */
 function isoDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
 
 function toStampEvent(row: StampEventRow): StampEvent {
   return { id: row.id, kind: row.kind, at: row.occurredAt, correctsId: row.correctsEventId };
+}
+
+export interface StampStatus {
+  state: StampState;
+  workedMinutes: number;
+  breakMinutes: number;
 }
 
 export interface StampResult {
@@ -59,12 +76,22 @@ export interface DayEvent {
   occurredAt: string;
   correctsEventId: string | null;
   correctionReason: string | null;
+  /** Nacherfassungs-Kennzeichnung (A-03), fuer die Anzeige in der Timeline. */
+  lateEntry: boolean;
+  lateReason: string | null;
 }
 
 export interface DayListing {
   events: DayEvent[];
   status: StampStatus;
   findings: Finding[];
+}
+
+/** Bewertete Sicht auf den (fuer einen Referenzzeitpunkt) relevanten Abrechnungstag. */
+interface DayView {
+  status: StampStatus;
+  findings: Finding[];
+  day: AccountingDay | null;
 }
 
 @Injectable()
@@ -74,38 +101,95 @@ export class StampingService {
     private readonly tenantContext: TenantContextService,
     private readonly audit: AuditClient,
     private readonly geofence: GeofenceService,
+    private readonly workLocations: WorkLocationService,
   ) {}
 
-  /** Verarbeitet eine Stempelung (validiert den Statuswechsel inkl. Korrekturen). */
+  private windowWhere(tenantId: string, employeeId: string, from: Date, to: Date): SQL {
+    return and(
+      eq(stampEvents.tenantId, tenantId),
+      eq(stampEvents.employeeId, employeeId),
+      gte(stampEvents.occurredAt, from),
+      lte(stampEvents.occurredAt, to),
+    ) as SQL;
+  }
+
+  /**
+   * Bewertete Tagessicht: Abrechnungstag = lokaler Tag des Schichtbeginns
+   * (ADR-0018) in der Zeitzone des aufgeloesten Einsatzortes (ADR-0016).
+   * Referenz ist die Schicht, die den Zeitpunkt `ref` enthaelt; ausserhalb
+   * jeder Schicht gilt der lokale Kalendertag von `ref`.
+   */
+  private buildView(events: StampEvent[], timeZone: string, ref: Date, now: Date): DayView {
+    const days = buildAccountingDays(events, timeZone, ARBZG_2026_V1, now);
+    const state = shiftState(days.flatMap((d) => d.shifts));
+    const refMs = ref.getTime();
+    let refDay =
+      days.find((d) =>
+        d.shifts.some(
+          (s) =>
+            s.startAt.getTime() <= refMs &&
+            (s.endAt === null ? refMs <= now.getTime() : refMs <= s.endAt.getTime()),
+        ),
+      ) ?? null;
+    if (!refDay) {
+      const isoRef = localDateOf(ref, timeZone);
+      refDay = days.find((d) => d.date === isoRef) ?? null;
+    }
+    return {
+      status: {
+        state,
+        workedMinutes: refDay?.workedMinutes ?? 0,
+        breakMinutes: refDay?.breakMinutes ?? 0,
+      },
+      findings: refDay?.findings ?? [],
+      day: refDay,
+    };
+  }
+
+  /** Verarbeitet eine Stempelung (validiert die Schichtfolge inkl. Korrekturen). */
   async stamp(input: {
     employeeId: string;
     kind: StampKind;
     source: 'web' | 'mobile' | 'terminal';
     occurredAt?: string;
+    reason?: string;
+    workLocationId?: string;
     location?: StampLocation;
   }): Promise<StampResult> {
     const ctx = this.tenantContext.require();
-    const occurredAt = input.occurredAt ? new Date(input.occurredAt) : new Date();
+    const now = new Date();
+    const occurredAt = input.occurredAt ? new Date(input.occurredAt) : now;
+
+    // A-03: Nacherfassung > 24 h nach der Arbeitsleistung nur mit Begruendung;
+    // der Eintrag wird dauerhaft als late_entry markiert.
+    const isLate = now.getTime() - occurredAt.getTime() > LATE_ENTRY_MS;
+    if (isLate && !input.reason) {
+      throw new BadRequestException(
+        'Nacherfassung mehr als 24 Stunden nach der Arbeitsleistung erfordert eine Begründung (reason).',
+      );
+    }
+
     // Standort-Pruefung (nur wenn je Mandant aktiviert; sonst 'not_required'
-    // ohne Auswertung der Position, Kern-Invariante 5). Ausserhalb der
-    // Insert-Transaktion ausgewertet.
+    // ohne Auswertung der Position, Kern-Invariante 5).
     const geo = await this.geofence.checkStampLocation(input.location);
 
     let result: { row: StampEventRow | undefined; events: StampEvent[] };
     try {
       result = await this.db.transaction(async (tx) => {
         await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
+        const from = new Date(occurredAt.getTime() - EVENT_WINDOW_MS);
+        const to = new Date(occurredAt.getTime() + EVENT_WINDOW_MS);
         const rows = await tx
           .select()
           .from(stampEvents)
-          .where(dayWhere(ctx.tenantId, input.employeeId, occurredAt))
+          .where(this.windowWhere(ctx.tenantId, input.employeeId, from, to))
           .orderBy(asc(stampEvents.occurredAt));
         const candidate: StampEvent[] = [
           ...rows.map(toStampEvent),
           { kind: input.kind, at: occurredAt },
         ];
-        // Validiert den Statuswechsel auf den WIRKSAMEN Ereignissen.
-        foldStampDay(resolveEffectiveEvents(candidate));
+        // Validiert die SCHICHTFOLGE (auch ueber Mitternacht, K-02/K-03).
+        foldShifts(candidate);
         const inserted = await tx
           .insert(stampEvents)
           .values({
@@ -117,6 +201,9 @@ export class StampingService {
             locationCheck: geo.check,
             locationSiteId: geo.siteId,
             locationDistanceM: geo.distanceM,
+            workLocationId: input.workLocationId ?? null,
+            lateEntry: isLate,
+            lateReason: isLate ? (input.reason ?? null) : null,
           })
           .returning();
         return { row: inserted[0], events: candidate };
@@ -138,15 +225,16 @@ export class StampingService {
       actorId: ctx.userId,
       subjectType: 'stamp_event',
       subjectId: row.id,
-      payload: { kind: input.kind },
+      payload: { kind: input.kind, ...(isLate ? { lateEntry: true } : {}) },
     });
 
-    const now = new Date();
-    return {
-      event: row,
-      status: computeStampStatus(result.events, now),
-      findings: evaluateStampDay(result.events, ARBZG_2026_V1, now, { date: isoDate(occurredAt) }),
-    };
+    const resolved = await this.workLocations.resolve(
+      input.employeeId,
+      isoDate(occurredAt),
+      input.workLocationId ?? null,
+    );
+    const view = this.buildView(result.events, resolved.timeZone, occurredAt, now);
+    return { event: row, status: view.status, findings: view.findings };
   }
 
   /**
@@ -161,8 +249,14 @@ export class StampingService {
   }): Promise<StampResult> {
     const ctx = this.tenantContext.require();
     const correctedAt = new Date(input.occurredAt);
+    const now = new Date();
 
-    let result: { row: StampEventRow | undefined; events: StampEvent[] };
+    let result: {
+      row: StampEventRow | undefined;
+      events: StampEvent[];
+      employeeId: string;
+      workLocationId: string | null;
+    };
     try {
       result = await this.db.transaction(async (tx) => {
         await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
@@ -174,14 +268,23 @@ export class StampingService {
         if (!target) {
           throw new NotFoundException('Zu korrigierende Stempelung nicht gefunden.');
         }
+        // Fenster deckt Original UND korrigierten Zeitpunkt ab (auch wenn die
+        // Korrektur eine Stempelung ueber die Mitternachtsgrenze verschiebt).
+        const from = new Date(
+          Math.min(target.occurredAt.getTime(), correctedAt.getTime()) - EVENT_WINDOW_MS,
+        );
+        const to = new Date(
+          Math.max(target.occurredAt.getTime(), correctedAt.getTime()) + EVENT_WINDOW_MS,
+        );
         const existing = await tx
           .select()
           .from(stampEvents)
-          .where(dayWhere(ctx.tenantId, target.employeeId, target.occurredAt))
+          .where(this.windowWhere(ctx.tenantId, target.employeeId, from, to))
           .orderBy(asc(stampEvents.occurredAt));
         const corrective: StampEvent = { kind: target.kind, at: correctedAt, correctsId: target.id };
-        // Pruefen, dass die korrigierte Tagesfolge gueltig bleibt.
-        foldStampDay(resolveEffectiveEvents([...existing.map(toStampEvent), corrective]));
+        const candidate = [...existing.map(toStampEvent), corrective];
+        // Pruefen, dass die korrigierte SCHICHTFOLGE gueltig bleibt.
+        foldShifts(candidate);
         const inserted = await tx
           .insert(stampEvents)
           .values({
@@ -192,14 +295,19 @@ export class StampingService {
             source: target.source,
             correctsEventId: target.id,
             correctionReason: input.correctionReason,
+            workLocationId: target.workLocationId,
           })
           .returning();
         const insertedRow = inserted[0];
-        const events = [
-          ...existing.map(toStampEvent),
-          ...(insertedRow ? [toStampEvent(insertedRow)] : []),
-        ];
-        return { row: insertedRow, events };
+        const events = insertedRow
+          ? [...existing.map(toStampEvent), toStampEvent(insertedRow)]
+          : candidate;
+        return {
+          row: insertedRow,
+          events,
+          employeeId: target.employeeId,
+          workLocationId: target.workLocationId,
+        };
       });
     } catch (err) {
       if (err instanceof StampTransitionError) {
@@ -221,135 +329,156 @@ export class StampingService {
       payload: { correctsEventId: input.eventId, reason: input.correctionReason },
     });
 
-    const now = new Date();
-    return {
-      event: row,
-      status: computeStampStatus(result.events, now),
-      findings: evaluateStampDay(result.events, ARBZG_2026_V1, now, { date: isoDate(correctedAt) }),
-    };
+    const resolved = await this.workLocations.resolve(
+      result.employeeId,
+      isoDate(correctedAt),
+      result.workLocationId,
+    );
+    const view = this.buildView(result.events, resolved.timeZone, correctedAt, now);
+    return { event: row, status: view.status, findings: view.findings };
   }
 
-  /** Aktueller Tagesstatus und Live-Bewertung fuer einen Mitarbeitenden. */
+  /**
+   * Aktueller Status und Live-Bewertung. Referenz ist die laufende Schicht
+   * (auch wenn sie am Vortag begonnen hat, ADR-0018); ohne laufende Schicht
+   * der lokale Kalendertag "heute" in der Einsatzort-Zeitzone.
+   */
   async today(
     employeeId: string,
     now: Date = new Date(),
   ): Promise<{ status: StampStatus; findings: Finding[] }> {
-    const ctx = this.tenantContext.require();
-    const rows = await this.db.transaction(async (tx) => {
-      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
-      return tx
-        .select()
-        .from(stampEvents)
-        .where(dayWhere(ctx.tenantId, employeeId, now))
-        .orderBy(asc(stampEvents.occurredAt));
-    });
-    const events = rows.map(toStampEvent);
-    return {
-      status: computeStampStatus(events, now),
-      findings: evaluateStampDay(events, ARBZG_2026_V1, now, { date: isoDate(now) }),
-    };
+    const view = await this.loadDayView(employeeId, now);
+    return { status: view.status, findings: view.findings };
   }
 
-  /** Listet die Roh-Ereignisse eines Tages (inkl. Korrekturen) plus Status/Befunde. */
+  /** Ereignisse der relevanten Schicht(en) plus Status/Befunde (Heute-Ansicht). */
   async listDay(employeeId: string, now: Date = new Date()): Promise<DayListing> {
     const ctx = this.tenantContext.require();
-    const rows = await this.db.transaction(async (tx) => {
-      await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
-      return tx
-        .select()
-        .from(stampEvents)
-        .where(dayWhere(ctx.tenantId, employeeId, now))
-        .orderBy(asc(stampEvents.occurredAt));
-    });
-    const events = rows.map(toStampEvent);
-    return {
-      events: rows.map((r) => ({
+    const rows = await this.loadWindowRows(ctx.tenantId, employeeId, now);
+    const resolved = await this.workLocations.resolve(employeeId, isoDate(now));
+    const view = this.buildView(rows.map(toStampEvent), resolved.timeZone, now, now);
+
+    // Roh-Ereignisse (inkl. korrigierter Originale) im Zeitbereich der
+    // Schichten des Referenztags - fuer die Timeline mit Korrektur-Historie.
+    const spans = (view.day?.shifts ?? []).map((s) => ({
+      from: s.startAt.getTime(),
+      to: (s.endAt ?? now).getTime(),
+    }));
+    const events = rows
+      .filter((r) => spans.some((sp) => r.occurredAt.getTime() >= sp.from && r.occurredAt.getTime() <= sp.to))
+      .map((r) => ({
         id: r.id,
         kind: r.kind,
         occurredAt: r.occurredAt.toISOString(),
         correctsEventId: r.correctsEventId,
         correctionReason: r.correctionReason,
-      })),
-      status: computeStampStatus(events, now),
-      findings: evaluateStampDay(events, ARBZG_2026_V1, now, { date: isoDate(now) }),
-    };
+        lateEntry: r.lateEntry,
+        lateReason: r.lateReason,
+      }));
+    return { events, status: view.status, findings: view.findings };
+  }
+
+  private async loadWindowRows(
+    tenantId: string,
+    employeeId: string,
+    now: Date,
+  ): Promise<StampEventRow[]> {
+    return this.db.transaction(async (tx) => {
+      await tx.execute(sql`select set_config('app.tenant_id', ${tenantId}, true)`);
+      return tx
+        .select()
+        .from(stampEvents)
+        .where(
+          this.windowWhere(tenantId, employeeId, new Date(now.getTime() - EVENT_WINDOW_MS), now),
+        )
+        .orderBy(asc(stampEvents.occurredAt));
+    });
+  }
+
+  private async loadDayView(employeeId: string, now: Date): Promise<DayView> {
+    const ctx = this.tenantContext.require();
+    const rows = await this.loadWindowRows(ctx.tenantId, employeeId, now);
+    const resolved = await this.workLocations.resolve(employeeId, isoDate(now));
+    return this.buildView(rows.map(toStampEvent), resolved.timeZone, now, now);
   }
 
   /**
-   * Idempotente Batch-Synchronisation der Offline-Queue (B3). Ereignisse mit
-   * bereits bekannter clientEventId werden uebersprungen (keine Dubletten); die
-   * resultierende Tagesfolge wird je Tag auf Gueltigkeit geprueft. Jede neu
-   * uebernommene Stempelung erzeugt ein AuditEvent (Kern-Invariante 2).
+   * Idempotente Batch-Synchronisation der Offline-Queue (B3, A-06). Ereignisse
+   * mit bekannter clientEventId werden uebersprungen (keine Dubletten); die
+   * resultierende SCHICHTFOLGE wird als Ganzes validiert (auch ueber
+   * Mitternacht, K-02). Offline erfasste Eintraege aelter als 24 h werden als
+   * late_entry mit systemischer Begruendung 'offline_sync' markiert (A-03) -
+   * die Synchronisation bleibt moeglich (A-06), der Marker bleibt sichtbar.
    */
   async sync(input: {
     employeeId: string;
-    items: ReadonlyArray<{ clientEventId: string; kind: StampKind; occurredAt: string; location?: StampLocation }>;
+    items: ReadonlyArray<{
+      clientEventId: string;
+      kind: StampKind;
+      occurredAt: string;
+      location?: StampLocation;
+    }>;
   }): Promise<{ accepted: number; duplicates: number }> {
     const ctx = this.tenantContext.require();
+    if (input.items.length === 0) return { accepted: 0, duplicates: 0 };
+    const now = new Date();
     const acceptedItems: Array<{ kind: StampKind; id: string }> = [];
     let summary = { accepted: 0, duplicates: 0 };
-    // Standort-Auswerter EINMAL laden (Einstellungen + aktive Standorte); wertet
-    // die offline erfassten Positionen rein in-memory aus (Kern-Invariante 5).
     const evaluate = await this.geofence.buildEvaluator();
+
+    const times = input.items.map((it) => new Date(it.occurredAt).getTime());
+    const from = new Date(Math.min(...times) - EVENT_WINDOW_MS);
+    const to = new Date(Math.max(...times) + EVENT_WINDOW_MS);
 
     try {
       summary = await this.db.transaction(async (tx) => {
         await tx.execute(sql`select set_config('app.tenant_id', ${ctx.tenantId}, true)`);
-        const byDay = new Map<string, Array<{ clientEventId: string; kind: StampKind; occurredAt: string; location?: StampLocation }>>();
-        for (const item of input.items) {
-          const day = new Date(item.occurredAt).toISOString().slice(0, 10);
-          const bucket = byDay.get(day) ?? [];
-          bucket.push(item);
-          byDay.set(day, bucket);
-        }
+        const existing = await tx
+          .select()
+          .from(stampEvents)
+          .where(this.windowWhere(ctx.tenantId, input.employeeId, from, to))
+          .orderBy(asc(stampEvents.occurredAt));
+        const knownClientIds = new Set(
+          existing.map((r) => r.clientEventId).filter((x): x is string => x !== null),
+        );
+        const fresh = input.items.filter((it) => !knownClientIds.has(it.clientEventId));
+        let duplicates = input.items.length - fresh.length;
+
+        const candidate: StampEvent[] = [
+          ...existing.map(toStampEvent),
+          ...fresh.map((it) => ({ kind: it.kind, at: new Date(it.occurredAt) })),
+        ];
+        // Wirft StampTransitionError bei ungueltiger Schichtfolge -> 409.
+        foldShifts(candidate);
 
         let accepted = 0;
-        let duplicates = 0;
-        for (const dayItems of byDay.values()) {
-          const first = dayItems[0];
-          if (!first) continue;
-          const existing = await tx
-            .select()
-            .from(stampEvents)
-            .where(dayWhere(ctx.tenantId, input.employeeId, new Date(first.occurredAt)))
-            .orderBy(asc(stampEvents.occurredAt));
-          const knownClientIds = new Set(
-            existing.map((r) => r.clientEventId).filter((x): x is string => x !== null),
-          );
-          const fresh = dayItems.filter((it) => !knownClientIds.has(it.clientEventId));
-          duplicates += dayItems.length - fresh.length;
-
-          const candidate: StampEvent[] = [
-            ...existing.map(toStampEvent),
-            ...fresh.map((it) => ({ kind: it.kind, at: new Date(it.occurredAt) })),
-          ];
-          // Wirft StampTransitionError bei ungueltiger Tagesfolge -> 409.
-          foldStampDay(resolveEffectiveEvents(candidate));
-
-          for (const it of fresh) {
-            const geo = evaluate(it.location);
-            const inserted = await tx
-              .insert(stampEvents)
-              .values({
-                tenantId: ctx.tenantId,
-                employeeId: input.employeeId,
-                kind: it.kind,
-                occurredAt: new Date(it.occurredAt),
-                source: 'mobile',
-                clientEventId: it.clientEventId,
-                locationCheck: geo.check,
-                locationSiteId: geo.siteId,
-                locationDistanceM: geo.distanceM,
-              })
-              .onConflictDoNothing()
-              .returning();
-            const row = inserted[0];
-            if (row) {
-              accepted += 1;
-              acceptedItems.push({ kind: it.kind, id: row.id });
-            } else {
-              duplicates += 1;
-            }
+        for (const it of fresh) {
+          const occurredAt = new Date(it.occurredAt);
+          const isLate = now.getTime() - occurredAt.getTime() > LATE_ENTRY_MS;
+          const geo = evaluate(it.location);
+          const inserted = await tx
+            .insert(stampEvents)
+            .values({
+              tenantId: ctx.tenantId,
+              employeeId: input.employeeId,
+              kind: it.kind,
+              occurredAt,
+              source: 'mobile',
+              clientEventId: it.clientEventId,
+              locationCheck: geo.check,
+              locationSiteId: geo.siteId,
+              locationDistanceM: geo.distanceM,
+              lateEntry: isLate,
+              lateReason: isLate ? 'offline_sync' : null,
+            })
+            .onConflictDoNothing()
+            .returning();
+          const row = inserted[0];
+          if (row) {
+            accepted += 1;
+            acceptedItems.push({ kind: it.kind, id: row.id });
+          } else {
+            duplicates += 1;
           }
         }
         return { accepted, duplicates };
