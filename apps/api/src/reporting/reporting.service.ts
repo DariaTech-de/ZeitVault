@@ -3,6 +3,7 @@ import { type SQL, and, asc, eq, gte, lt, sql } from 'drizzle-orm';
 import {
   type AccountBalance,
   type Finding,
+  type OvertimeWeekSummary,
   type StampEvent,
   averagingWindow,
   buildAccountingDays,
@@ -14,6 +15,7 @@ import {
   foldShifts,
   isHolidayAtLocation,
   restPeriodsFromShifts,
+  summarizeOvertime,
   trimLeadingWindowCut,
 } from '@zeitvault/domain';
 import type { Bundesland } from '@zeitvault/domain';
@@ -74,6 +76,12 @@ export interface Timesheet {
   days: TimesheetDay[];
   totalWorkedMinutes: number;
   totalBreakMinutes: number;
+  /**
+   * C-10: zwei GETRENNTE Wochenzaehler - Ueberstunden (ueber das
+   * Vertragsmass, tariflich konfigurierbar) vs. Mehrarbeit (ueber die
+   * Hoechstarbeitszeit); davon haengt die Zuschlagspflicht ab.
+   */
+  overtimeWeeks: OvertimeWeekSummary[];
 }
 
 export interface ViolationEntry {
@@ -146,6 +154,10 @@ export class ReportingService {
       days,
       totalWorkedMinutes: days.reduce((s, d) => s + d.workedMinutes, 0),
       totalBreakMinutes: days.reduce((s, d) => s + d.breakMinutes, 0),
+      overtimeWeeks: summarizeOvertime(
+        days.map((d) => ({ date: d.date, workedMinutes: d.workedMinutes })),
+        packageFor,
+      ),
     };
   }
 

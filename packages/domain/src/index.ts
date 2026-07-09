@@ -4,6 +4,7 @@ export * from './arbzg/engine';
 export * from './arbzg/layering';
 export * from './arbzg/night';
 export * from './arbzg/weekly';
+export * from './arbzg/overtime';
 export * from './arbzg/work-window';
 export * from './arbzg/averaging';
 export * from './arbzg/rest-compensation';

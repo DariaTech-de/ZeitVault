@@ -89,6 +89,8 @@ export const PARAM_FAVORABILITY: Readonly<Record<keyof ArbZgRuleParams, Favorabi
   arbzgNightStartMinute: 'neutral',
   arbzgNightEndMinute: 'neutral',
   maxWeeklyMinutes: 'lower',
+  // C-10: reines Vertragsmass (Zaehler-Definition), keine Schutzrichtung.
+  contractualWeeklyMinutes: 'neutral',
   minFreeSundaysPerYear: 'higher',
   sundayCompensationDays: 'lower',
   holidayCompensationDays: 'lower',

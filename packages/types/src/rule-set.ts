@@ -49,6 +49,7 @@ export const ruleParamsSchema = z
     arbzgNightStartMinute: z.number().int().min(0).max(1439),
     arbzgNightEndMinute: z.number().int().min(0).max(1439),
     maxWeeklyMinutes: z.number().int().min(0),
+    contractualWeeklyMinutes: z.number().int().min(0),
     minFreeSundaysPerYear: z.number().int().min(0),
     sundayCompensationDays: z.number().int().min(0),
     holidayCompensationDays: z.number().int().min(0),

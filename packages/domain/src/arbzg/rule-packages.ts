@@ -28,6 +28,8 @@ export const ARBZG_2026_V1: RulePackage = {
     arbzgNightStartMinute: 23 * 60,
     arbzgNightEndMinute: 6 * 60,
     maxWeeklyMinutes: 48 * 60,
+    // C-10: Vertragsmass kommt aus TV/BV (0 = nicht konfiguriert).
+    contractualWeeklyMinutes: 0,
     maxWorkingTimeMode: 'daily',
     averagingPeriodMonths: 6,
     averagingPeriodWeeks: 0,
@@ -81,6 +83,7 @@ export const JARBSCHG_2026_V1: RulePackage = {
     arbzgNightStartMinute: 23 * 60,
     arbzgNightEndMinute: 6 * 60,
     maxWeeklyMinutes: 40 * 60,
+    contractualWeeklyMinutes: 0,
     maxWorkingTimeMode: 'daily_and_weekly',
     averagingPeriodMonths: 1,
     averagingPeriodWeeks: 0,

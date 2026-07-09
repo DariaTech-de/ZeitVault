@@ -61,6 +61,13 @@ export interface ArbZgRuleParams {
    */
   maxWeeklyMinutes: number;
   /**
+   * Vertraglich vereinbarte Wochenarbeitszeit (C-10): Basis des
+   * UEBERSTUNDEN-Zaehlers (Mehrarbeit misst dagegen `maxWeeklyMinutes`).
+   * 0 = nicht konfiguriert (kein Ueberstunden-Zaehler); neutraler Parameter,
+   * die Definition kommt aus dem Tarifvertrag (Regelschicht, B-08).
+   */
+  contractualWeeklyMinutes: number;
+  /**
    * Massstab der Hoechstarbeitszeit (B-11, Rechtsstand-Abschnitt): 'daily'
    * (heutiges ArbZG) oder 'weekly' (nur tarifgebunden, per gruppen-gescoptem
    * Regelsatz umschaltbar). 'daily_and_weekly' gilt NUR fuer Gesetzespakete
