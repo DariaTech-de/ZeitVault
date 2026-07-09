@@ -12,6 +12,7 @@ import {
   type Timesheet,
   type ViolationEntry,
 } from './reporting.service';
+import { type SurchargeReportEntry, SurchargeReportService } from './surcharge-report.service';
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Erwartet YYYY-MM-DD');
 const uuidSchema = z.string().uuid();
@@ -21,7 +22,10 @@ const uuidSchema = z.string().uuid();
 @UseGuards(TenantGuard, RolesGuard)
 @Controller('reports')
 export class ReportingController {
-  constructor(private readonly reporting: ReportingService) {}
+  constructor(
+    private readonly reporting: ReportingService,
+    private readonly surcharges: SurchargeReportService,
+  ) {}
 
   /** Stundenzettel je Mitarbeitenden und Zeitraum. */
   @Get('timesheet')
@@ -63,5 +67,15 @@ export class ReportingController {
   @Roles('manager', 'admin')
   async balances(): Promise<BalanceListEntry[]> {
     return this.reporting.balanceList();
+  }
+
+  /** Paragraf-3b-Zuschlaege (C-01..C-08, K-04) je Mitarbeitenden und Zeitraum. */
+  @Get('surcharges')
+  @Roles('manager', 'admin')
+  async surchargeReport(
+    @Query('from') from: string,
+    @Query('to') to: string,
+  ): Promise<SurchargeReportEntry[]> {
+    return this.surcharges.report(isoDateSchema.parse(from), isoDateSchema.parse(to));
   }
 }
