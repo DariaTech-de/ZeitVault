@@ -12,7 +12,7 @@ import {
   evaluateWeeklyWorkTime,
   evaluateWorkingTimeAverage,
   foldShifts,
-  isGermanHoliday,
+  isHolidayAtLocation,
   restPeriodsFromShifts,
   trimLeadingWindowCut,
 } from '@zeitvault/domain';
@@ -259,9 +259,13 @@ export class ReportingService {
         packageFor,
         materializeAt,
       ).filter((d) => d.date >= from && d.date <= to);
+      // C-08: Feiertag haengt am EINSATZORT (Bundesland + Gemeinde-Schluessel).
       const land = resolved.countryCode === 'DE' ? (resolved.stateCode as Bundesland | null) : null;
       const isHoliday = (date: string): boolean =>
-        land !== null && isGermanHoliday(date, land);
+        isHolidayAtLocation(date, {
+          stateCode: land,
+          municipalHolidayKeys: resolved.municipalHolidayKeys,
+        });
       const findings = evaluateSundayHolidayRest(
         days.map((d) => ({ date: d.date, workedMinutes: d.workedMinutes })),
         isHoliday,

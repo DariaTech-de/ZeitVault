@@ -191,6 +191,15 @@ export const workLocations = pgTable(
     countryCode: varchar('country_code', { length: 2 }).notNull().default('DE'),
     stateCode: varchar('state_code', { length: 8 }),
     municipalityCode: varchar('municipality_code', { length: 16 }),
+    /**
+     * C-08: Gemeinde-Feiertage als explizite Schluessel (Migration 0026;
+     * 'fronleichnam' | 'mariae_himmelfahrt' | 'friedensfest') - keine
+     * amtliche Gemeindeliste, Pflege durch die Administration.
+     */
+    municipalHolidayKeys: jsonb('municipal_holiday_keys')
+      .$type<string[]>()
+      .notNull()
+      .default([]),
     timeZone: varchar('time_zone', { length: 64 }).notNull(),
     isDefault: boolean('is_default').notNull().default(false),
     active: boolean('active').notNull().default(true),

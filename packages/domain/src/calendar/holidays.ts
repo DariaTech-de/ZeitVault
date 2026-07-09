@@ -111,3 +111,61 @@ export function isGermanHoliday(isoDate: string, land: Bundesland): boolean {
   const year = Number(isoDate.slice(0, 4));
   return germanHolidays(year, land).some((holiday) => holiday.date === isoDate);
 }
+
+/**
+ * Gemeindespezifische Feiertage (C-08) als EXPLIZITE Schluessel am Einsatzort:
+ * ZeitVault fuehrt bewusst keine amtliche Gemeindeliste (AGS) - welche
+ * Gemeinde-Ausnahme gilt, pflegt die Administration je Einsatzort
+ * (rechtsverbindlich sind die Landesfeiertagsgesetze):
+ * - 'fronleichnam': einzelne Gemeinden in SN und TH,
+ * - 'mariae_himmelfahrt': Gemeinden in BY mit ueberwiegend katholischer
+ *   Bevoelkerung (im SL bereits landesweit),
+ * - 'friedensfest': Stadtgebiet Augsburg (08.08.).
+ */
+export type MunicipalHolidayKey = 'fronleichnam' | 'mariae_himmelfahrt' | 'friedensfest';
+
+export const MUNICIPAL_HOLIDAY_KEYS: readonly MunicipalHolidayKey[] = [
+  'fronleichnam',
+  'mariae_himmelfahrt',
+  'friedensfest',
+];
+
+/** Feiertagsrelevanter Ausschnitt eines Einsatzortes (ADR-0016, C-08). */
+export interface HolidayLocation {
+  /** Bundesland; ohne Bundesland keine Feiertagsbewertung (Landesrecht). */
+  stateCode: Bundesland | null;
+  municipalHolidayKeys?: readonly MunicipalHolidayKey[];
+}
+
+/**
+ * Gesetzliche Feiertage eines Jahres fuer einen EINSATZORT (C-08): Kalender
+ * des Bundeslandes plus die am Einsatzort gepflegten Gemeinde-Ausnahmen.
+ * Bereits landesweit geltende Tage werden nicht dupliziert. Ohne Bundesland
+ * gibt es keine Bewertung (leere Liste) - Feiertagsrecht ist Landesrecht.
+ */
+export function holidaysForLocation(year: number, location: HolidayLocation): Holiday[] {
+  if (location.stateCode === null) return [];
+  const holidays = germanHolidays(year, location.stateCode);
+  const easter = easterSunday(year);
+  const municipal: Record<MunicipalHolidayKey, Holiday> = {
+    fronleichnam: {
+      date: addDays(year, easter.month, easter.day, 60),
+      name: 'Fronleichnam',
+    },
+    mariae_himmelfahrt: { date: ymd(year, 8, 15), name: 'Mariä Himmelfahrt' },
+    friedensfest: { date: ymd(year, 8, 8), name: 'Augsburger Friedensfest' },
+  };
+  for (const key of location.municipalHolidayKeys ?? []) {
+    const holiday = municipal[key];
+    if (holiday && !holidays.some((h) => h.date === holiday.date)) {
+      holidays.push(holiday);
+    }
+  }
+  return holidays.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** Prüft, ob ein ISO-Datum am Einsatzort ein gesetzlicher Feiertag ist (C-08). */
+export function isHolidayAtLocation(isoDate: string, location: HolidayLocation): boolean {
+  const year = Number(isoDate.slice(0, 4));
+  return holidaysForLocation(year, location).some((holiday) => holiday.date === isoDate);
+}

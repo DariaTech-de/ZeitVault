@@ -34,6 +34,10 @@ const MISSING_DEFAULT_MESSAGE =
   'Kein Einsatzort auflösbar: Für den Mandanten ist kein Standard-Einsatzort ' +
   'hinterlegt. Bitte unter Einsatzorte einen Standard-Einsatzort anlegen (Pflicht-Stammdatum).';
 
+function municipalKeys(row: WorkLocationRow): WorkLocationSummary['municipalHolidayKeys'] {
+  return (row.municipalHolidayKeys ?? []) as WorkLocationSummary['municipalHolidayKeys'];
+}
+
 function toSummary(row: WorkLocationRow): WorkLocationSummary {
   return {
     id: row.id,
@@ -41,6 +45,7 @@ function toSummary(row: WorkLocationRow): WorkLocationSummary {
     countryCode: row.countryCode,
     stateCode: row.stateCode,
     municipalityCode: row.municipalityCode,
+    municipalHolidayKeys: municipalKeys(row),
     timeZone: row.timeZone,
     isDefault: row.isDefault,
     active: row.active,
@@ -57,6 +62,7 @@ function toResolved(
     countryCode: row.countryCode,
     stateCode: row.stateCode,
     municipalityCode: row.municipalityCode,
+    municipalHolidayKeys: municipalKeys(row),
     resolvedFrom,
   };
 }
@@ -108,6 +114,7 @@ export class WorkLocationService {
           countryCode: input.countryCode,
           stateCode: input.stateCode ?? null,
           municipalityCode: input.municipalityCode ?? null,
+          municipalHolidayKeys: input.municipalHolidayKeys ?? [],
           timeZone: input.timeZone,
           isDefault: input.isDefault,
         })

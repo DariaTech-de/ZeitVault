@@ -9,12 +9,25 @@ import { bundeslandSchema, uuidSchema } from './common';
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Erwartet YYYY-MM-DD');
 
+/**
+ * Gemeinde-Feiertage (C-08) als explizite Schluessel am Einsatzort; ZeitVault
+ * fuehrt bewusst keine amtliche Gemeindeliste (Pflege durch Administration).
+ */
+export const municipalHolidayKeySchema = z.enum([
+  'fronleichnam',
+  'mariae_himmelfahrt',
+  'friedensfest',
+]);
+export type MunicipalHolidayKeyDto = z.infer<typeof municipalHolidayKeySchema>;
+
 export const createWorkLocationSchema = z.object({
   name: z.string().min(1).max(200),
   countryCode: z.string().length(2).default('DE'),
   stateCode: bundeslandSchema.optional(),
   /** Amtlicher Gemeindeschluessel (AGS) fuer gemeindescharfe Feiertage (optional). */
   municipalityCode: z.string().min(1).max(16).optional(),
+  /** Gemeinde-Feiertagsausnahmen dieses Einsatzortes (C-08). */
+  municipalHolidayKeys: z.array(municipalHolidayKeySchema).max(3).optional(),
   timeZone: z.string().min(1).max(64),
   /** Fallback-Einsatzort des Mandanten, wenn ein Mitarbeitender keine Zuordnung hat. */
   isDefault: z.boolean().default(false),
@@ -41,6 +54,7 @@ export interface WorkLocationSummary {
   countryCode: string;
   stateCode: string | null;
   municipalityCode: string | null;
+  municipalHolidayKeys: MunicipalHolidayKeyDto[];
   timeZone: string;
   isDefault: boolean;
   active: boolean;
@@ -57,6 +71,8 @@ export interface ResolvedWorkLocation {
   countryCode: string;
   stateCode: string | null;
   municipalityCode: string | null;
+  /** Gemeinde-Feiertagsausnahmen des aufgeloesten Einsatzortes (C-08). */
+  municipalHolidayKeys: MunicipalHolidayKeyDto[];
   /**
    * Herkunft der Aufloesung (Uebersteuerung > Zuordnung > Mandanten-Default).
    * Es gibt bewusst KEINEN stillen Fallback: fehlt der Mandanten-Default,
