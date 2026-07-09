@@ -1,12 +1,13 @@
-import { Body, Controller, Get, Post, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { z } from 'zod';
-import { payrollExportSchema } from '@zeitvault/types';
+import { payrollCategorySchema, setPayrollMappingSchema } from '@zeitvault/types';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
 import { TenantGuard } from '../common/tenant.guard';
-import type { ExportJobRow } from '../db/schema';
+import type { ExportJobRow, PayrollMappingRow } from '../db/schema';
 import { ExportResult, ExportService } from './export.service';
+import { PayrollMappingService } from './payroll-mapping.service';
 
 const isoDateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Erwartet YYYY-MM-DD');
 const formatSchema = z.enum(['csv', 'json']).default('csv');
@@ -16,7 +17,10 @@ const formatSchema = z.enum(['csv', 'json']).default('csv');
 @UseGuards(TenantGuard, RolesGuard)
 @Controller('exports')
 export class ExportController {
-  constructor(private readonly exports: ExportService) {}
+  constructor(
+    private readonly exports: ExportService,
+    private readonly payrollMappings: PayrollMappingService,
+  ) {}
 
   /** GoBD-Prüfexport der Stempel-Rohdaten im Zeitraum (nur Vorgesetzte/Administration). */
   @Post('gobd')
@@ -34,7 +38,8 @@ export class ExportController {
   }
 
   /**
-   * Generischer Lohnexport (D3-Gerüst) mit mandantenseitiger Mapping-Tabelle.
+   * Generischer Lohnexport (D3-Gerüst). C-11: nutzt das PERSISTIERTE
+   * Lohnartenmapping des Mandanten (Admin-Pflege, kein Mapping im Request).
    * KEIN DATEV-Datensatzformat (CLAUDE.md §9) - nur generisches CSV.
    */
   @Post('payroll')
@@ -42,10 +47,30 @@ export class ExportController {
   async payroll(
     @Query('from') from: string,
     @Query('to') to: string,
-    @Body() body: unknown,
   ): Promise<ExportResult & { unmapped: Array<{ category: string; value: number }> }> {
-    const input = payrollExportSchema.parse(body ?? {});
-    return this.exports.runPayroll(isoDateSchema.parse(from), isoDateSchema.parse(to), input.mapping);
+    return this.exports.runPayroll(isoDateSchema.parse(from), isoDateSchema.parse(to));
+  }
+
+  /** C-11: Lohnartenmapping des Mandanten (Kategorie -> Lohnart/Faktor). */
+  @Get('payroll-mapping')
+  @Roles('manager', 'admin')
+  async listMapping(): Promise<PayrollMappingRow[]> {
+    return this.payrollMappings.list();
+  }
+
+  /** C-11: Mapping-Eintrag anlegen/aktualisieren (ohne Deployment wirksam). */
+  @Put('payroll-mapping')
+  @Roles('admin')
+  async setMapping(@Body() body: unknown): Promise<PayrollMappingRow> {
+    return this.payrollMappings.set(setPayrollMappingSchema.parse(body));
+  }
+
+  /** C-11: Mapping-Eintrag entfernen (Kategorie erscheint wieder als unmapped). */
+  @Delete('payroll-mapping/:category')
+  @Roles('admin')
+  async removeMapping(@Param('category') category: string): Promise<{ ok: true }> {
+    await this.payrollMappings.remove(payrollCategorySchema.parse(category));
+    return { ok: true };
   }
 
   /** Protokoll der durchgeführten Exporte (nur Vorgesetzte/Administration). */

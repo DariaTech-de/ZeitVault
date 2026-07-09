@@ -7,6 +7,7 @@ import { CorrectionService } from '../src/correction/correction.service';
 import * as schema from '../src/db/schema';
 import type { Database } from '../src/db/tokens';
 import { ExportService } from '../src/export/export.service';
+import { PayrollMappingService } from '../src/export/payroll-mapping.service';
 import { GeofenceService } from '../src/geofence/geofence.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { ReportingService } from '../src/reporting/reporting.service';
@@ -45,7 +46,9 @@ beforeAll(async () => {
   stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations, rules, notificationsSvc);
   corrections = new CorrectionService(db, tenantContext, auditStub);
   reporting = new ReportingService(db, tenantContext, workLocations, rules);
-  exportService = new ExportService(db, tenantContext, auditStub, workLocations, rules);
+  const mappings = new PayrollMappingService(db, tenantContext, auditStub);
+  exportService = new ExportService(db, tenantContext, auditStub, workLocations, rules, mappings);
+  await asTenant(() => mappings.set({ category: 'work_time', lohnart: '100' }));
 
   await asTenant(() =>
     workLocations.create({
@@ -126,7 +129,7 @@ describe('unresolved-Zustandsmodell (ADR-0019)', () => {
     await pastStamp(emp.id, 'clock_out', '2026-05-12T14:00:00.000Z');
 
     const result = await asTenant(() =>
-      exportService.runPayroll('2026-05-11', '2026-05-12', { work_time: { lohnart: '100' } }),
+      exportService.runPayroll('2026-05-11', '2026-05-12'),
     );
     const line = result.content
       .split('\n')

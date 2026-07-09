@@ -24,6 +24,7 @@ const ADMIN: NavItem[] = [
   { href: '/admin', label: 'Übersicht' },
   { href: '/admin/auswertungen', label: 'Auswertungen' },
   { href: '/admin/standort', label: 'Standort' },
+  { href: '/admin/lohnarten', label: 'Lohnarten' },
   { href: '/admin/terminals', label: 'Terminals' },
   { href: '/admin/lizenz', label: 'Lizenz' },
 ];

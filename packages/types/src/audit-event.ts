@@ -22,6 +22,8 @@ export const auditActionSchema = z.enum([
   'project_time.book',
   'eau.request',
   'export.run',
+  'payroll_mapping.set',
+  'payroll_mapping.delete',
   'retention.block',
   'retention.anonymize',
   'retention.purge',

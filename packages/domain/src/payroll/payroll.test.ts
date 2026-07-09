@@ -38,7 +38,7 @@ describe('toPayrollCsv', () => {
     const { items } = mapToLineItems(aggregates, mapping);
     const csv = toPayrollCsv(items);
     expect(csv.split('\n')[0]).toBe(
-      'personnel_number,category,lohnart,kostenstelle,ausfallschluessel,value,unit',
+      'personnel_number,category,lohnart,kostenstelle,ausfallschluessel,value,unit,factor_percent',
     );
     expect(csv).toContain('P-001,work_time,1000,KST-10,,9600,minutes');
   });

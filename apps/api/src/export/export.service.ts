@@ -24,6 +24,7 @@ import {
   stampEvents,
 } from '../db/schema';
 import { DB, type Database } from '../db/tokens';
+import { PayrollMappingService } from './payroll-mapping.service';
 import { RuleResolutionService } from '../rules/rule-resolution.service';
 import { closeOverCorrections, stampCorrectorFetcher } from '../stamping/event-window';
 import { WorkLocationService } from '../work-location/work-location.service';
@@ -82,6 +83,7 @@ export class ExportService {
     private readonly audit: AuditClient,
     private readonly workLocations: WorkLocationService,
     private readonly rules: RuleResolutionService,
+    private readonly payrollMappings: PayrollMappingService,
   ) {}
 
   /**
@@ -153,13 +155,17 @@ export class ExportService {
    * Abrechnungsschlüssel ab. Ausgabe ist ein GENERISCHES, neutrales CSV - KEIN
    * DATEV-Datensatzformat (CLAUDE.md §9). Wird wie der GoBD-Export als
    * unveränderlicher ExportJob mit Prüfsumme protokolliert (export.run).
+   *
+   * C-11: Das Mapping kommt aus der PERSISTIERTEN, mandantenspezifischen
+   * Tabelle (Admin-Pflege) - nicht aus dem Request. Eine Aenderung dort ist
+   * ohne Deployment beim naechsten Export wirksam.
    */
   async runPayroll(
     from: string,
     to: string,
-    mapping: DatevMapping,
   ): Promise<ExportResult & { unmapped: Array<{ category: PayrollCategory; value: number }> }> {
     const ctx = this.tenantContext.require();
+    const mapping = await this.payrollMappings.getMapping();
     const aggregates = await this.aggregatePayroll(from, to);
     const { items, unmapped } = mapToLineItems(aggregates, mapping);
     const content = toPayrollCsv(items);

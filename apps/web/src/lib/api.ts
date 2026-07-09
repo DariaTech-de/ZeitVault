@@ -480,3 +480,51 @@ export function fetchViolations(
 export function fetchBalanceList(identity: Identity): Promise<BalanceListEntry[]> {
   return request(identity, '/api/reports/balances');
 }
+
+/* ---------------- Lohnartenmapping (C-11) ---------------- */
+
+export type PayrollCategory =
+  | 'work_time'
+  | 'on_call_duty'
+  | 'standby'
+  | 'travel'
+  | 'vacation'
+  | 'sick'
+  | 'special';
+
+export interface PayrollMappingEntry {
+  id: string;
+  category: PayrollCategory;
+  lohnart: string;
+  kostenstelle: string | null;
+  ausfallschluessel: string | null;
+  factorPercent: number | null;
+}
+
+export function fetchPayrollMappings(identity: Identity): Promise<PayrollMappingEntry[]> {
+  return request(identity, '/api/exports/payroll-mapping');
+}
+
+export function setPayrollMapping(
+  identity: Identity,
+  input: {
+    category: PayrollCategory;
+    lohnart: string;
+    kostenstelle?: string;
+    ausfallschluessel?: string;
+    factorPercent?: number;
+  },
+): Promise<PayrollMappingEntry> {
+  return request(identity, '/api/exports/payroll-mapping', {
+    method: 'PUT',
+    body: JSON.stringify(input),
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
+export function removePayrollMapping(
+  identity: Identity,
+  category: PayrollCategory,
+): Promise<{ ok: true }> {
+  return request(identity, `/api/exports/payroll-mapping/${category}`, { method: 'DELETE' });
+}

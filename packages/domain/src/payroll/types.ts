@@ -39,6 +39,12 @@ export interface DatevMappingEntry {
   lohnart: string;
   kostenstelle?: string;
   ausfallschluessel?: string;
+  /**
+   * Verguetungsfaktor in Prozent (C-09, z. B. Bereitschaftsdienst 60);
+   * weggelassen = 100. Wird als eigene Spalte mitgefuehrt - die Minuten
+   * bleiben die ECHTEN Minuten (keine stille Skalierung der Zeitdaten).
+   */
+  factorPercent?: number;
 }
 
 /** Mapping-Tabelle: interne Kategorie -> Abrechnungsschlüssel. */
@@ -61,4 +67,6 @@ export interface PayrollLineItem {
   ausfallschluessel: string | null;
   value: number;
   unit: 'minutes' | 'days';
+  /** Verguetungsfaktor in Prozent (C-09); null = 100. */
+  factorPercent: number | null;
 }

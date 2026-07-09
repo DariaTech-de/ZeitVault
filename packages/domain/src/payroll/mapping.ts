@@ -34,6 +34,7 @@ export function mapToLineItems(
       ausfallschluessel: entry.ausfallschluessel ?? null,
       value: aggregate.value,
       unit: aggregate.unit,
+      factorPercent: entry.factorPercent ?? null,
     });
   }
 
@@ -48,6 +49,7 @@ const COLUMNS = [
   'ausfallschluessel',
   'value',
   'unit',
+  'factor_percent',
 ] as const;
 
 function csvCell(value: string | number | null): string {
@@ -72,6 +74,7 @@ export function toPayrollCsv(items: readonly PayrollLineItem[]): string {
       csvCell(i.ausfallschluessel),
       csvCell(i.value),
       csvCell(i.unit),
+      csvCell(i.factorPercent),
     ].join(','),
   );
   return [header, ...lines].join('\n') + '\n';

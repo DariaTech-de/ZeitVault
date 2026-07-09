@@ -6,6 +6,7 @@ import { TenantContextService } from '../src/common/tenant-context.service';
 import * as schema from '../src/db/schema';
 import type { Database } from '../src/db/tokens';
 import { ExportService } from '../src/export/export.service';
+import { PayrollMappingService } from '../src/export/payroll-mapping.service';
 import { GeofenceService } from '../src/geofence/geofence.service';
 import { NotificationsService } from '../src/notifications/notifications.service';
 import { RuleResolutionService } from '../src/rules/rule-resolution.service';
@@ -21,6 +22,7 @@ const TENANT = `itest-wk-${stamp}`;
 let pool: Pool;
 let stamping: StampingService;
 let exportService: ExportService;
+let mappings: PayrollMappingService;
 let tenantContext: TenantContextService;
 
 const auditStub = { append: async () => undefined } as unknown as AuditClient;
@@ -35,7 +37,8 @@ beforeAll(async () => {
   const rules = new RuleResolutionService(db, tenantContext);
   const notifications = new NotificationsService(db, tenantContext);
   stamping = new StampingService(db, tenantContext, auditStub, geofence, workLocations, rules, notifications);
-  exportService = new ExportService(db, tenantContext, auditStub, workLocations, rules);
+  mappings = new PayrollMappingService(db, tenantContext, auditStub);
+  exportService = new ExportService(db, tenantContext, auditStub, workLocations, rules, mappings);
 
   await asTenant(() =>
     workLocations.create({
@@ -96,13 +99,16 @@ describe('C-09: eigene Lohnart je Bewertungsart im Lohnexport', () => {
       );
     }
 
+    for (const [category, lohnart] of [
+      ['work_time', '100'],
+      ['on_call_duty', '210'],
+      ['standby', '220'],
+      ['travel', '230'],
+    ] as const) {
+      await asTenant(() => mappings.set({ category, lohnart }));
+    }
     const result = await asTenant(() =>
-      exportService.runPayroll('2026-07-01', '2026-07-31', {
-        work_time: { lohnart: '100' },
-        on_call_duty: { lohnart: '210' },
-        standby: { lohnart: '220' },
-        travel: { lohnart: '230' },
-      }),
+      exportService.runPayroll('2026-07-01', '2026-07-31'),
     );
     const lines = result.content
       .trim()

@@ -307,6 +307,28 @@ export const reprocessingRuns = pgTable(
 );
 export type ReprocessingRunRow = typeof reprocessingRuns.$inferSelect;
 
+// C-11: Persistiertes Lohnartenmapping (Kategorie -> Abrechnungsschluessel;
+// Aenderung ohne Deployment wirksam). Keine DATEV-Feldlayouts (CLAUDE.md 9).
+export const payrollMappings = pgTable(
+  'payroll_mappings',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    tenantId: varchar('tenant_id', { length: 64 }).notNull(),
+    category: varchar('category', { length: 32 }).notNull(),
+    lohnart: varchar('lohnart', { length: 32 }).notNull(),
+    kostenstelle: varchar('kostenstelle', { length: 32 }),
+    ausfallschluessel: varchar('ausfallschluessel', { length: 32 }),
+    /** Verguetungsfaktor in Prozent je Bewertungsart (C-09); NULL = 100. */
+    factorPercent: integer('factor_percent'),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('payroll_mappings_tenant_idx').on(t.tenantId),
+    uniqueIndex('payroll_mappings_tenant_category_uq').on(t.tenantId, t.category),
+  ],
+);
+export type PayrollMappingRow = typeof payrollMappings.$inferSelect;
+
 // B-13: Verstosswarnungen fuer die Fuehrungskraft (praeventiv beim Erfassen).
 export const notifications = pgTable(
   'notifications',
