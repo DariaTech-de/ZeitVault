@@ -35,6 +35,7 @@ function toStampEvent(row: StampEventRow): StampEvent {
     id: row.id,
     kind: row.kind,
     at: row.occurredAt,
+    workKind: row.workKind,
     correctsId: row.correctsEventId,
     // Korrekturweg-Herkunft (auch Nachtraege ohne correctsId): unterscheidet
     // 'closed' von 'closed_by_correction' (ADR-0019).

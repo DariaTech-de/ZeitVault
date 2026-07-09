@@ -25,6 +25,7 @@ function toStampEvent(row: StampEventRow): StampEvent {
     id: row.id,
     kind: row.kind,
     at: row.occurredAt,
+    workKind: row.workKind,
     correctsId: row.correctsEventId,
     // Korrekturweg-Herkunft (auch Nachtraege ohne correctsId): unterscheidet
     // 'closed' von 'closed_by_correction' (ADR-0019).
@@ -139,6 +140,8 @@ export class CorrectionService {
             kind: req.proposedKind,
             at: req.proposedOccurredAt,
             correctsId: target?.id,
+            // C-09: Bewertungsart der Schicht bleibt bei Korrekturen erhalten.
+            ...(target ? { workKind: target.workKind } : {}),
           };
           // Wirft StampTransitionError bei ungueltiger SCHICHTFOLGE -> 409
           // (Schichten duerfen Mitternacht ueberschreiten, K-02/K-03);
@@ -160,6 +163,7 @@ export class CorrectionService {
               correctsEventId: target?.id ?? null,
               correctionReason: req.reason,
               workLocationId: targetLocation,
+              workKind: target?.workKind ?? 'full_work',
               lateEntry: isLate,
               lateReason: isLate ? req.reason : null,
             })

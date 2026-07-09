@@ -23,10 +23,14 @@ export interface AccountingDay {
   date: string;
   /**
    * Gearbeitete Minuten; enthaelt bei unaufgeloesten Schichten nur die durch
-   * Ereignisse abgeschlossenen Intervalle (UNTERGRENZE, ADR-0019).
+   * Ereignisse abgeschlossenen Intervalle (UNTERGRENZE, ADR-0019). Zaehlt
+   * Vollarbeit, Bereitschaftsdienst und Reisezeit - NICHT Rufbereitschaft
+   * (C-09: Rufbereitschaft ist Ruhezeit).
    */
   workedMinutes: number;
   breakMinutes: number;
+  /** Rufbereitschafts-Minuten (C-09): getrennt ausgewiesen, keine Arbeitszeit. */
+  standbyMinutes: number;
   findings: Finding[];
   shifts: Shift[];
 }
@@ -70,10 +74,20 @@ export function buildAccountingDays(
     const workIntervals: WorkInterval[] = [];
     const breakIntervals: BreakInterval[] = [];
     const unresolvedShifts: Shift[] = [];
+    let standbyMinutes = 0;
+    // C-09: Rufbereitschaft ('standby') ist RUHEZEIT - ihre Intervalle gehen
+    // nicht in die ArbZG-Bewertung ein und unterbrechen die Ruhezeit nicht;
+    // sie werden nur getrennt gezaehlt. Bereitschaftsdienst/Reisezeit zaehlen
+    // als Arbeitszeit.
+    const workShifts = dayShifts.filter((s) => s.workKind !== 'standby');
     for (const shift of dayShifts) {
       const m = materializeShift(shift, now, graceMs);
-      workIntervals.push(...m.workIntervals);
-      breakIntervals.push(...m.breakIntervals);
+      if (shift.workKind === 'standby') {
+        standbyMinutes += totalMinutes(m.workIntervals);
+      } else {
+        workIntervals.push(...m.workIntervals);
+        breakIntervals.push(...m.breakIntervals);
+      }
       if (shiftResolution(shift, now, graceMs) === 'unresolved') {
         unresolvedShifts.push(shift);
       }
@@ -85,7 +99,7 @@ export function buildAccountingDays(
         breaks: breakIntervals,
         previousShiftEnd,
         previousShiftEndIsLowerBound: previousEndIsLowerBound,
-        firstShiftStart: dayShifts[0]?.startAt ?? null,
+        firstShiftStart: workShifts[0]?.startAt ?? null,
       },
       pkg,
     );
@@ -111,13 +125,15 @@ export function buildAccountingDays(
       date,
       workedMinutes: totalMinutes(workIntervals),
       breakMinutes: totalMinutes(breakIntervals),
+      standbyMinutes,
       findings,
       shifts: dayShifts,
     });
     // Ruhezeit-Anker fuer den Folgetag: letztes bekanntes Schichtende; bei
     // unaufgeloesten Schichten die Untergrenze (Verstoss bleibt sicher,
-    // Einhaltung wird "nicht pruefbar").
-    const last = dayShifts.at(-1);
+    // Einhaltung wird "nicht pruefbar"). Rufbereitschaft ist RUHEZEIT (C-09)
+    // und verschiebt den Anker nicht.
+    const last = workShifts.at(-1);
     if (last) {
       if (last.endAt) {
         previousShiftEnd = last.endAt;

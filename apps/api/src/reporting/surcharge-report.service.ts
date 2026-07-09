@@ -71,6 +71,7 @@ function toStampEvent(row: StampEventRow): StampEvent {
     id: row.id,
     kind: row.kind,
     at: row.occurredAt,
+    workKind: row.workKind,
     correctsId: row.correctsEventId,
     viaCorrection: row.correctsEventId !== null || row.correctionReason !== null,
   };
@@ -174,6 +175,9 @@ export class SurchargeReportService {
       const totals = zeroMinutes();
       let excludedUnresolvedShifts = 0;
       for (const shift of shifts) {
+        // C-09: Rufbereitschaft ist keine Arbeitszeit - keine Paragraf-3b-
+        // Zuschlaege; ihre Verguetung laeuft ueber die eigene Lohnart.
+        if (shift.workKind === 'standby') continue;
         const clockInId = shift.events[0]?.id;
         const overrideId = (clockInId && overrideByEventId.get(clockInId)) || null;
         const resolved = await resolveFor(overrideId);

@@ -40,6 +40,7 @@ function toStampEvent(row: StampEventRow): StampEvent {
     id: row.id,
     kind: row.kind,
     at: row.occurredAt,
+    workKind: row.workKind,
     correctsId: row.correctsEventId,
     // Korrekturweg-Herkunft (auch Nachtraege ohne correctsId): unterscheidet
     // 'closed' von 'closed_by_correction' (ADR-0019).
@@ -263,7 +264,15 @@ export class ExportService {
     const rangeEnd = new Date(new Date(`${to}T00:00:00.000Z`).getTime() + PAD_MS);
     const nowTs = new Date();
     const materializeAt = nowTs.getTime() < rangeEnd.getTime() ? nowTs : rangeEnd;
-    const workedByEmployee = new Map<string, number>();
+    // C-09: je Bewertungsart getrennt aggregieren - jede Art hat ihre eigene
+    // Kategorie und damit ihre eigene Lohnart (+ ggf. Faktor) im Mapping.
+    const KIND_CATEGORY = {
+      full_work: 'work_time',
+      on_call_duty: 'on_call_duty',
+      standby: 'standby',
+      travel: 'travel',
+    } as const satisfies Record<string, PayrollCategory>;
+    const workedByEmployeeCategory = new Map<string, number>();
     const activeRuleSets = await this.rules.loadActiveRuleSets();
     const memberships = await this.rules.loadGroupMemberships();
     const birthDates = await this.rules.loadBirthDates();
@@ -280,15 +289,18 @@ export class ExportService {
       // exportiert - Lohn zahlt nie auf eine Untergrenze. Die Aufloesung
       // erfolgt durch Menschen; der Perioden-Freeze (F-03, Schnitt 5) wird
       // solche Perioden zusaetzlich blockieren.
-      let minutes = 0;
       for (const day of days) {
         const graceMs = packageFor(day.date).params.openShiftGraceMinutes * 60_000;
         for (const shift of day.shifts) {
           if (shiftResolution(shift, materializeAt, graceMs) === 'unresolved') continue;
-          minutes += totalMinutes(materializeShift(shift, materializeAt, graceMs).workIntervals);
+          const minutes = totalMinutes(
+            materializeShift(shift, materializeAt, graceMs).workIntervals,
+          );
+          if (minutes === 0) continue;
+          const key = `${employeeId}|${KIND_CATEGORY[shift.workKind]}`;
+          workedByEmployeeCategory.set(key, (workedByEmployeeCategory.get(key) ?? 0) + minutes);
         }
       }
-      if (minutes > 0) workedByEmployee.set(employeeId, minutes);
     }
 
     // Genehmigte Abwesenheiten je Mitarbeitenden/Kategorie (Arbeitstage im Schnitt
@@ -306,10 +318,11 @@ export class ExportService {
     }
 
     const aggregates: PayrollAggregate[] = [];
-    for (const [employeeId, minutes] of workedByEmployee) {
+    for (const [key, minutes] of workedByEmployeeCategory) {
+      const [employeeId, category] = key.split('|') as [string, PayrollCategory];
       const pn = personnel.get(employeeId);
       if (pn && minutes > 0) {
-        aggregates.push({ personnelNumber: pn, category: 'work_time', value: minutes, unit: 'minutes' });
+        aggregates.push({ personnelNumber: pn, category, value: minutes, unit: 'minutes' });
       }
     }
     for (const [key, days] of absenceDays) {

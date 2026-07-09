@@ -27,6 +27,7 @@ function toStampEvent(row: StampEventRow): StampEvent {
     id: row.id,
     kind: row.kind,
     at: row.occurredAt,
+    workKind: row.workKind,
     correctsId: row.correctsEventId,
     viaCorrection: row.correctsEventId !== null || row.correctionReason !== null,
   };

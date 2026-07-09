@@ -9,10 +9,26 @@
  * einen GENERISCHEN, neutralen CSV-Export. Die Schlüssel (lohnart usw.) sind
  * mandantenseitig gepflegte Codes, keine von ZeitVault vorgegebenen Layouts.
  */
-export type PayrollCategory = 'work_time' | 'vacation' | 'sick' | 'special';
+/**
+ * Interne Abrechnungskategorien. C-09: Jede Bewertungsart hat ihre EIGENE
+ * Kategorie und damit ihre eigene Lohnart (und optional einen eigenen
+ * Verguetungsfaktor) im Mapping: 'work_time' = Vollarbeit, 'on_call_duty' =
+ * Bereitschaftsdienst, 'standby' = Rufbereitschaft, 'travel' = Reisezeit.
+ */
+export type PayrollCategory =
+  | 'work_time'
+  | 'on_call_duty'
+  | 'standby'
+  | 'travel'
+  | 'vacation'
+  | 'sick'
+  | 'special';
 
 export const PAYROLL_CATEGORIES: readonly PayrollCategory[] = [
   'work_time',
+  'on_call_duty',
+  'standby',
+  'travel',
   'vacation',
   'sick',
   'special',

@@ -162,6 +162,11 @@ export const stampEvents = pgTable(
     // Einsatzort-Uebersteuerung fuer diesen Stempel (ADR-0016); NULL = der zum
     // Zeitpunkt gueltige Standard-Einsatzort des Mitarbeitenden.
     workLocationId: uuid('work_location_id'),
+    // C-09: Bewertungsart der Schicht (am clock_in wirksam, Migration 0027).
+    workKind: varchar('work_kind', { length: 16 })
+      .$type<'full_work' | 'on_call_duty' | 'standby' | 'travel'>()
+      .notNull()
+      .default('full_work'),
     // Nacherfassung (A-03): Eintraege > 24 h nach der Arbeitsleistung werden
     // dauerhaft markiert und tragen eine Pflicht-Begruendung.
     lateEntry: boolean('late_entry').notNull().default(false),

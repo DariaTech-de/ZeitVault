@@ -1,7 +1,7 @@
 import type { BreakInterval, WorkInterval } from '../arbzg/types';
 import { localDateOf } from '../localtime/localtime';
 import { StampTransitionError, resolveEffectiveEvents } from './fold';
-import type { StampEvent, StampState } from './types';
+import type { StampEvent, StampState, WorkKind } from './types';
 
 /**
  * Schicht-basierte Faltung (ADR-0017/0018, K-02/K-03): Die Faltungseinheit ist
@@ -13,6 +13,8 @@ export interface Shift {
   startAt: Date;
   /** null = kein clock_out bekannt (Schicht laeuft ODER ist unaufgeloest). */
   endAt: Date | null;
+  /** Bewertungsart der Schicht (vom clock_in; Default 'full_work', C-09). */
+  workKind: WorkKind;
   workIntervals: WorkInterval[];
   breakIntervals: BreakInterval[];
   /** Offenes Segment (nur bei endAt === null und nicht unresolved). */
@@ -85,6 +87,7 @@ export function foldShifts(events: readonly StampEvent[]): Shift[] {
         current = {
           startAt: event.at,
           endAt: null,
+          workKind: event.workKind ?? 'full_work',
           workIntervals: [],
           breakIntervals: [],
           open: null,

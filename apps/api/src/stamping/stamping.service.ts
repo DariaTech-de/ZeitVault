@@ -13,6 +13,7 @@ import {
   type StampKind,
   StampTransitionError,
   type StampState,
+  type WorkKind,
   applyStampRounding,
   buildAccountingDays,
   foldShifts,
@@ -64,6 +65,7 @@ function toStampEvent(row: StampEventRow): StampEvent {
     id: row.id,
     kind: row.kind,
     at: row.occurredAt,
+    workKind: row.workKind,
     correctsId: row.correctsEventId,
     // Korrekturweg-Herkunft (auch Nachtraege ohne correctsId): unterscheidet
     // 'closed' von 'closed_by_correction' (ADR-0019).
@@ -196,10 +198,18 @@ export class StampingService {
     occurredAt?: string;
     reason?: string;
     workLocationId?: string;
+    workKind?: WorkKind;
     location?: StampLocation;
   }): Promise<StampResult> {
     const ctx = this.tenantContext.require();
     const now = new Date();
+    // C-09: Die Bewertungsart haengt an der SCHICHT und wird am clock_in
+    // gesetzt; an anderen Ereignissen ist sie nicht interpretierbar.
+    if (input.workKind && input.kind !== 'clock_in') {
+      throw new BadRequestException(
+        'Die Bewertungsart (workKind) kann nur beim Einstempeln (clock_in) gesetzt werden.',
+      );
+    }
     // B-12: Konfigurierte Rundung setzt am EREIGNIS beim Eintragen an
     // (Standard 'none'; Abweichung nur per BV-Regelsatz). Korrekturen
     // uebernehmen den ausdruecklich eingegebenen Zeitpunkt UNVERAENDERT.
@@ -237,7 +247,7 @@ export class StampingService {
         // Fenster begonnenen Schicht gehoeren nicht zur Validierung.
         const candidate: StampEvent[] = [
           ...trimLeadingWindowCut(rows.map(toStampEvent)),
-          { kind: input.kind, at: occurredAt },
+          { kind: input.kind, at: occurredAt, ...(input.workKind ? { workKind: input.workKind } : {}) },
         ];
         // Validiert die SCHICHTFOLGE (auch ueber Mitternacht, K-02/K-03).
         foldShifts(candidate);
@@ -253,6 +263,7 @@ export class StampingService {
             locationSiteId: geo.siteId,
             locationDistanceM: geo.distanceM,
             workLocationId: input.workLocationId ?? null,
+            workKind: input.workKind ?? 'full_work',
             lateEntry: isLate,
             lateReason: isLate ? (input.reason ?? null) : null,
           })
@@ -291,6 +302,8 @@ export class StampingService {
             }
           : {}),
         ...(input.workLocationId ? { workLocationId: input.workLocationId } : {}),
+        // C-09: abweichende Bewertungsart ist lohnrelevant und gehoert in den Trail.
+        ...(input.workKind && input.workKind !== 'full_work' ? { workKind: input.workKind } : {}),
         ...(isLate ? { lateEntry: true, lateReason: input.reason ?? '' } : {}),
       },
     });
@@ -353,7 +366,13 @@ export class StampingService {
           from,
           to,
         );
-        const corrective: StampEvent = { kind: target.kind, at: correctedAt, correctsId: target.id };
+        const corrective: StampEvent = {
+          kind: target.kind,
+          at: correctedAt,
+          correctsId: target.id,
+          // C-09: Die Bewertungsart der Schicht bleibt bei Zeitkorrekturen erhalten.
+          workKind: target.workKind,
+        };
         const candidate = [...trimLeadingWindowCut(existing.map(toStampEvent)), corrective];
         // Pruefen, dass die korrigierte SCHICHTFOLGE gueltig bleibt.
         foldShifts(candidate);
@@ -368,6 +387,7 @@ export class StampingService {
             correctsEventId: target.id,
             correctionReason: input.correctionReason,
             workLocationId: target.workLocationId,
+            workKind: target.workKind,
           })
           .returning();
         const insertedRow = inserted[0];
@@ -496,11 +516,20 @@ export class StampingService {
       clientEventId: string;
       kind: StampKind;
       occurredAt: string;
+      workKind?: WorkKind;
       location?: StampLocation;
     }>;
   }): Promise<{ accepted: number; duplicates: number }> {
     const ctx = this.tenantContext.require();
     if (input.items.length === 0) return { accepted: 0, duplicates: 0 };
+    // C-09: Bewertungsart nur am clock_in (siehe stamp()).
+    for (const it of input.items) {
+      if (it.workKind && it.kind !== 'clock_in') {
+        throw new BadRequestException(
+          'Die Bewertungsart (workKind) kann nur beim Einstempeln (clock_in) gesetzt werden.',
+        );
+      }
+    }
     const now = new Date();
     const acceptedItems: Array<{ kind: StampKind; id: string; occurredAt: Date; isLate: boolean }> =
       [];
@@ -531,7 +560,11 @@ export class StampingService {
 
         const candidate: StampEvent[] = [
           ...trimLeadingWindowCut(existing.map(toStampEvent)),
-          ...fresh.map((it) => ({ kind: it.kind, at: new Date(it.occurredAt) })),
+          ...fresh.map((it) => ({
+            kind: it.kind,
+            at: new Date(it.occurredAt),
+            ...(it.workKind ? { workKind: it.workKind } : {}),
+          })),
         ];
         // Wirft StampTransitionError bei ungueltiger Schichtfolge -> 409.
         foldShifts(candidate);
@@ -558,6 +591,7 @@ export class StampingService {
               locationCheck: geo.check,
               locationSiteId: geo.siteId,
               locationDistanceM: geo.distanceM,
+              workKind: it.workKind ?? 'full_work',
               lateEntry: isLate,
               lateReason: isLate ? 'offline_sync' : null,
             })

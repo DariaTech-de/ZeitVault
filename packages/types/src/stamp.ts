@@ -10,6 +10,14 @@ export const stampSourceSchema = z.enum(['web', 'mobile', 'terminal']);
 export type StampSource = z.infer<typeof stampSourceSchema>;
 
 /**
+ * Bewertungsart der Schicht (C-09), nur am `clock_in` zulaessig:
+ * Vollarbeit | Bereitschaftsdienst (Arbeitszeit) | Rufbereitschaft
+ * (Ruhezeit) | Reisezeit (wie Vollarbeit; eigene Lohnart via Mapping).
+ */
+export const workKindSchema = z.enum(['full_work', 'on_call_duty', 'standby', 'travel']);
+export type WorkKindDto = z.infer<typeof workKindSchema>;
+
+/**
  * Eingabe einer Stempelung. `occurredAt` ist optional (Default: Serverzeit);
  * fuer Offline-Sync (Mobile) wird der tatsaechliche Zeitpunkt mitgesendet.
  */
@@ -23,6 +31,8 @@ export const stampSchema = z.object({
   // Einsatzort-Uebersteuerung fuer diesen Stempel (ADR-0016); ohne Angabe gilt
   // der zum Zeitpunkt gueltige Standard-Einsatzort des Mitarbeitenden.
   workLocationId: uuidSchema.optional(),
+  // Bewertungsart der Schicht (C-09); nur bei kind=clock_in, Default Vollarbeit.
+  workKind: workKindSchema.optional(),
   // Optionale Position (nur wenn Geofencing aktiviert ist, ADR-0014). GPS ist
   // standardmaessig aus (Kern-Invariante 5); die App sendet nichts ungefragt.
   location: stampLocationSchema.optional(),
