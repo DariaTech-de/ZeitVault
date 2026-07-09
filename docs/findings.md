@@ -59,3 +59,27 @@ im passenden Schnitt bearbeitet.
     Architekturentscheidung (transaktionale Outbox oder Kompensation) —
     spätestens mit dem Perioden-Freeze (Schnitt 5), der auf
     Ledger-Vollständigkeit angewiesen ist.
+
+## Aus Schnitt 4 (2026-07-09)
+
+11. **Spec-AK C-08 nennt Hessen irrig als Land ohne Fronleichnam** („kein
+    Fronleichnam in ganz HE"): Fronleichnam ist in Hessen LANDESWEIT
+    gesetzlicher Feiertag (Hessisches Feiertagsgesetz). Der Kalender und der
+    AK-Test bilden die echte Rechtslage ab (Unterscheidung stattdessen über
+    BY vs. SN ohne Gemeinde-Schlüssel demonstriert); Spec-Korrektur
+    empfohlen. Hinweis: ersetzt keine Rechtsberatung.
+12. **`time_entries`-Konsolidierung und persistierter Bewertungs-Snapshot
+    (F-05/ADR-0016) sind bewusst NICHT Teil von Schnitt 4** — die
+    Zuschlags-Pipeline bewertet ad hoc gegen den aktuell aufgelösten
+    Einsatzort. Der Snapshot (samt Antwort auf Nr. 9) kommt
+    schnittplan-konform mit dem Perioden-Freeze in Schnitt 5 (F-03/F-05).
+13. **Web-/Mobile-Erfassung bietet die Bewertungsart (C-09) noch nicht zur
+    Auswahl an** — API, Offline-Sync und Korrektur-Vererbung tragen
+    `workKind` bereits; UI-Auswahl (Kommen als Bereitschaftsdienst/
+    Rufbereitschaft/Reisezeit) nachziehen, zusammen mit den offenen
+    UI-Kennzeichnungen aus Nr. 7.
+14. **Zuschlagsbeträge im Report sind eine Vorschau, kein Zahllauf**: Die
+    §-3b-Klassifikation liefert Minuten und (bei gesetztem Grundlohn)
+    Cent-Beträge mit den zwei Freistellungs-Anteilen; die Übergabe an die
+    Lohnabrechnung läuft weiterhin über den generischen Export (F-01 bleibt
+    durch die fehlende DATEV-Schnittstellenbeschreibung blockiert).
