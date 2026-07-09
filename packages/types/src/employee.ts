@@ -14,5 +14,10 @@ export const createEmployeeSchema = z.object({
    * automatische JArbSchG-Umschaltung fuer Beschaeftigte unter 18.
    */
   birthDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  /**
+   * C-06: Grundlohn als GANZZAHLIGE Cent (Geld ist nie Float). Optional -
+   * ohne Grundlohn werden Zuschlagsminuten ausgewiesen, aber keine Betraege.
+   */
+  hourlyBaseWageCents: z.number().int().nonnegative().optional(),
 });
 export type CreateEmployee = z.infer<typeof createEmployeeSchema>;

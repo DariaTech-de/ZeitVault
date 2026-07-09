@@ -144,6 +144,7 @@ export class AdminService {
           displayName: input.displayName,
           externalId: input.externalId ?? null,
           birthDate: input.birthDate ?? null,
+          hourlyBaseWageCents: input.hourlyBaseWageCents ?? null,
           status: 'active',
         })
         .returning();

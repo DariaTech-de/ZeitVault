@@ -50,6 +50,11 @@ export const employees = pgTable(
     birthDate: date('birth_date'),
     /** B-04: Nachtarbeitnehmer (§ 2 Abs. 5) - kuerzere Ausgleichsperiode. */
     nightWorker: boolean('night_worker').notNull().default(false),
+    /**
+     * C-06: Grundlohn als GANZZAHLIGE Cent (nie Float, Migration 0025).
+     * Optional - ohne Grundlohn nur Zuschlagsminuten, keine Betraege.
+     */
+    hourlyBaseWageCents: integer('hourly_base_wage_cents'),
     // OIDC-Subject (sub) des verknüpften Nutzers; /me löst darüber den
     // Mitarbeiter des angemeldeten Tokens auf.
     externalId: varchar('external_id', { length: 128 }),

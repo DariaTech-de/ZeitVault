@@ -25,6 +25,7 @@ export * from './accounts/balance';
 export * from './surcharge/types';
 export * from './surcharge/compute';
 export * from './surcharge/estg3b';
+export * from './money/money';
 export * from './surcharge/rule-packages';
 export * from './payroll/types';
 export * from './payroll/mapping';
